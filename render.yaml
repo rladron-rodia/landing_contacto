@@ -25,7 +25,7 @@ services:
       # En plan free de Resend SIN dominio verificado, MAIL_TO debe ser
       # el email con el que registraste tu cuenta de Resend.
       - key: MAIL_TO
-        value: rladron@gmail.com
+        value: rodrigo.ladron@gmail.com
       - key: ALLOWED_ORIGIN
         value: "*"
       # API key de Resend → secret en el dashboard de Render
