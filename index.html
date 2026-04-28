@@ -310,9 +310,9 @@
               class="absolute inset-0 bg-gradient-to-b from-brand-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
             </div><i
               class="fa-regular fa-clock text-3xl text-brand-400 mb-6"></i>
-            <h3 class="text-5xl font-bold text-white mb-2 tracking-tight">10k+
+            <h3 data-stat-value="capture_hours" class="text-5xl font-bold text-white mb-2 tracking-tight">10k+
             </h3>
-            <p data-es="Horas de Captura" data-en="Capture Hours"
+            <p data-stat-label="capture_hours" data-es="Horas de Captura" data-en="Capture Hours"
               class="text-sm font-medium text-gray-400 uppercase tracking-wide">
               Horas de Captura</p>
           </div>
@@ -322,9 +322,9 @@
               class="absolute inset-0 bg-gradient-to-b from-accent-cyan/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
             </div><i
               class="fa-solid fa-film text-3xl text-accent-cyan mb-6"></i>
-            <h3 class="text-5xl font-bold text-white mb-2 tracking-tight">2.5M
+            <h3 data-stat-value="indexed_videos" class="text-5xl font-bold text-white mb-2 tracking-tight">2.5M
             </h3>
-            <p data-es="Videos Indexados" data-en="Indexed Videos"
+            <p data-stat-label="indexed_videos" data-es="Videos Indexados" data-en="Indexed Videos"
               class="text-sm font-medium text-gray-400 uppercase tracking-wide">
               Videos Indexados</p>
           </div>
@@ -334,9 +334,9 @@
               class="absolute inset-0 bg-gradient-to-b from-accent-purple/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
             </div><i
               class="fa-solid fa-gamepad text-3xl text-accent-purple mb-6"></i>
-            <h3 class="text-5xl font-bold text-white mb-2 tracking-tight">50+
+            <h3 data-stat-value="games_covered" class="text-5xl font-bold text-white mb-2 tracking-tight">50+
             </h3>
-            <p data-es="Juegos Cubiertos" data-en="Games Covered"
+            <p data-stat-label="games_covered" data-es="Juegos Cubiertos" data-en="Games Covered"
               class="text-sm font-medium text-gray-400 uppercase tracking-wide">
               Juegos Cubiertos</p>
           </div>
@@ -1394,7 +1394,11 @@
     </script>
     <!-- Override opcional de la URL del backend (déjalo comentado en prod):
          <meta name="api-url" content="https://tu-backend.onrender.com/api/contact"> -->
+    <!-- Stats dinámicas desde Google Sheets. Pega aquí la URL del CSV publicado:
+         File → Share → Publish to web → Entire document → CSV → Copy URL -->
+    <meta name="stats-csv-url" content="">
     <script src="server/contact-form.js" defer></script>
+    <script src="server/stats-loader.js" defer></script>
   </body>
 
 </html>
