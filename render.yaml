@@ -28,7 +28,7 @@ services:
       - key: MAIL_FROM
         value: contacto@monou.gg
       - key: MAIL_TO
-        value: contacto@monou.gg
+        value: rodrigo.ladron@monou.gg
       - key: ALLOWED_ORIGIN
         value: "*"
       # SMTP_PASSWORD: secret, se setea en el dashboard de Render
