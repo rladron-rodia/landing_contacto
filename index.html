@@ -1033,19 +1033,19 @@
               se pondrá en contacto contigo para discutir tus necesidades de
               datos de entrenamiento.</p>
           </div>
-          <form action="mailto:rodrigo.ladron@monou.gg" method="POST"
-            enctype="text/plain" class="space-y-6">
+          <form id="ixmppy" action="javascript:void(0)" method="POST"
+            class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-2"><label data-es="Nombre completo"
                   data-en="Full name"
                   class="text-sm font-medium text-gray-300">Nombre
-                  completo</label><input type="text" placeholder="Ej. Jane Doe"
+                  completo</label><input name="nombre" type="text" required placeholder="Ej. Jane Doe"
                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
               </div>
               <div class="space-y-2"><label data-es="Email corporativo"
                   data-en="Corporate email"
                   class="text-sm font-medium text-gray-300">Email
-                  corporativo</label><input type="email"
+                  corporativo</label><input name="email" type="email" required
                   placeholder="jane@empresa.ai"
                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
               </div>
@@ -1053,14 +1053,16 @@
             <div class="space-y-2"><label data-es="Empresa / Organización"
                 data-en="Company / Organization"
                 class="text-sm font-medium text-gray-300">Empresa /
-                Organización</label><input type="text"
+                Organización</label><input name="empresa" type="text"
                 placeholder="Nombre de tu laboratorio o startup"
                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
             </div>
+            <!-- honeypot anti-bot -->
+            <input name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
             <div class="space-y-2"><label data-es="Caso de uso principal"
                 data-en="Main use case"
                 class="text-sm font-medium text-gray-300">Caso de uso
-                principal</label><select
+                principal</label><select name="caso_uso"
                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all appearance-none">
                 <option value="" disabled="" selected=""
                   data-es="Selecciona una opción" data-en="Select an option">
@@ -1084,7 +1086,7 @@
             <div class="space-y-2"><label data-es="Mensaje adicional (Opcional)"
                 data-en="Additional message (Optional)"
                 class="text-sm font-medium text-gray-300">Mensaje adicional
-                (Opcional)</label><textarea rows="4" placeholder="Cuéntanos más sobre el volumen de datos o juegos específicos que buscas..." class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none"></textarea>
+                (Opcional)</label><textarea name="mensaje" rows="4" placeholder="Cuéntanos más sobre el volumen de datos o juegos específicos que buscas..." class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none"></textarea>
             </div><button type="submit"
               class="w-full py-4 bg-white text-dark-900 font-bold rounded-xl hover:bg-gray-100 transition-colors mt-4 flex items-center justify-center gap-2"><span
                 data-es="Enviar Solicitud" data-en="Send Request">Enviar
@@ -1261,6 +1263,8 @@
         });
       });
     </script>
+    <script>window.MONOU_API_URL = "http://localhost:5000/api/contact";</script>
+    <script src="server/contact-form.js" defer></script>
   </body>
 
 </html>

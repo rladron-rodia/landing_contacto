@@ -32,7 +32,9 @@ load_dotenv()
 app = Flask(__name__)
 
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
-CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGIN}})
+# Permitir múltiples orígenes separados por coma (ej "http://localhost:8000,https://monou.gg")
+_origins = [o.strip() for o in ALLOWED_ORIGIN.split(",")] if ALLOWED_ORIGIN != "*" else "*"
+CORS(app, resources={r"/api/*": {"origins": _origins}}, supports_credentials=False)
 
 
 def send_email(payload: dict) -> None:
