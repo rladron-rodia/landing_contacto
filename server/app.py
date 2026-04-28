@@ -1,29 +1,34 @@
 """
 Servidor Flask para procesar el formulario de contacto del frame "ixmppy"
-y enviarlo por SMTP de Gmail.
+y enviarlo vía la API HTTP de Resend (https://resend.com).
 
-Variables de entorno requeridas (defínelas en un archivo .env o exportalas):
-  SMTP_HOST     -> smtp.gmail.com
-  SMTP_PORT     -> 587 (TLS) o 465 (SSL)
-  SMTP_MODE     -> "tls" o "ssl"
-  SMTP_USER     -> rladron@gmail.com
-  SMTP_PASSWORD -> Contraseña de aplicación (App Password de Google)
-  MAIL_TO       -> destinatario(s) separados por coma
-  MAIL_FROM     -> remitente (por lo general igual a SMTP_USER)
-  ALLOWED_ORIGIN -> origen permitido para CORS (ej: http://localhost:8000)
+Por qué Resend en lugar de SMTP de Gmail:
+  Render free tier bloquea outbound SMTP (puertos 25/465/587 → timeout).
+  Resend va por HTTPS (puerto 443), que nunca se filtra.
 
-Importante: Gmail YA NO acepta la contraseña normal de la cuenta.
-Debes generar una "Contraseña de aplicación" en
-https://myaccount.google.com/apppasswords (requiere verificación en 2 pasos).
+Variables de entorno:
+  RESEND_API_KEY  -> API key generada en https://resend.com/api-keys
+  MAIL_FROM       -> remitente. Ejemplos:
+                       "Monou.gg Landing <onboarding@resend.dev>"  (default sin verificar dominio)
+                       "Monou.gg <contacto@monou.gg>"              (requiere monou.gg verificado en Resend)
+  MAIL_TO         -> destinatario(s) separados por coma
+  ALLOWED_ORIGIN  -> CORS, "*" o lista separada por coma
+  DATABASE_URL    -> Postgres (opcional; si falta, no se guardan contactos)
+  ADMIN_TOKEN     -> token Bearer para listar contactos vía /api/contacts
+
+Limitación del plan free de Resend SIN dominio verificado:
+  - From debe ser onboarding@resend.dev (no puedes usar tu propio dominio)
+  - Solo puedes enviar TO el email con el que registraste la cuenta de Resend
+  Para producción real: verifica monou.gg en https://resend.com/domains y
+  cambia MAIL_FROM a contacto@monou.gg (o el alias que prefieras).
 """
 
 import os
 import socket
-import smtplib
-import ssl
+import json
+import urllib.request
+import urllib.error
 from contextlib import contextmanager
-from email.message import EmailMessage
-from email.utils import formataddr, formatdate, make_msgid
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -36,10 +41,8 @@ import db  # módulo de persistencia (degrada a no-op si DATABASE_URL no está)
 def force_ipv4():
     """Filtra getaddrinfo a IPv4 solamente durante el bloque.
 
-    Algunos hosts de Render anuncian IPv6 vía DNS pero la red del contenedor
-    no tiene ruta IPv6 de salida → smtplib intenta la dirección AAAA y falla
-    con `OSError: [Errno 101] Network is unreachable`. Forzando IPv4 evitamos
-    el problema y conectamos por la ruta que sí funciona.
+    Defensivo contra el problema histórico de IPv6 roto en algunos hosts
+    de Render. Resend va por HTTPS pero por si acaso lo aplicamos también.
     """
     original = socket.getaddrinfo
     def _ipv4_only(*args, **kwargs):
@@ -50,12 +53,12 @@ def force_ipv4():
     finally:
         socket.getaddrinfo = original
 
+
 load_dotenv()
 
 app = Flask(__name__)
 
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
-# Permitir múltiples orígenes separados por coma (ej "http://localhost:8000,https://monou.gg")
 _origins = [o.strip() for o in ALLOWED_ORIGIN.split(",")] if ALLOWED_ORIGIN != "*" else "*"
 CORS(app, resources={r"/api/*": {"origins": _origins}}, supports_credentials=False)
 
@@ -63,24 +66,52 @@ CORS(app, resources={r"/api/*": {"origins": _origins}}, supports_credentials=Fal
 db.init_schema()
 
 
-def send_email(payload: dict) -> None:
-    """Construye el correo y lo envía vía SMTP de Gmail."""
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_mode = os.getenv("SMTP_MODE", "tls").lower()
-    smtp_user = os.environ["SMTP_USER"].strip()
-    # Limpia App Passwords copiadas con espacios (incluido \xa0 non-breaking
-    # space que Google introduce en su UI). Gmail acepta los 16 chars pegados.
-    raw_pass = os.environ["SMTP_PASSWORD"]
-    smtp_pass = "".join(raw_pass.split())  # quita TODO whitespace (incl. \xa0)
-    mail_to = os.getenv("MAIL_TO", smtp_user)
-    mail_from = os.getenv("MAIL_FROM", smtp_user)
+# --------------------------------------------------------------------------
+# Errores específicos del envío de correo
+# --------------------------------------------------------------------------
 
-    nombre = payload.get("nombre", "").strip()
-    email = payload.get("email", "").strip()
-    empresa = payload.get("empresa", "").strip()
-    caso_uso = payload.get("caso_uso", "").strip()
-    mensaje = payload.get("mensaje", "").strip()
+class EmailError(Exception):
+    """Falla al enviar correo (genérico)."""
+
+
+class EmailAuthError(EmailError):
+    """API key rechazada por el proveedor."""
+
+
+class EmailValidationError(EmailError):
+    """El proveedor rechazó los datos del correo (ej. dominio no verificado,
+    destinatario no permitido en plan free)."""
+
+
+# --------------------------------------------------------------------------
+# Envío vía Resend
+# --------------------------------------------------------------------------
+
+RESEND_ENDPOINT = "https://api.resend.com/emails"
+
+
+def send_email(payload: dict) -> dict:
+    """Envía el correo a través de Resend.
+
+    Devuelve el JSON de la respuesta (incluye `id` del mensaje en Resend).
+    Lanza EmailAuthError / EmailValidationError / EmailError según el caso.
+    """
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    if not api_key:
+        raise EmailError("RESEND_API_KEY no está configurada")
+
+    mail_from = os.getenv("MAIL_FROM",
+                          "Monou.gg Landing <onboarding@resend.dev>").strip()
+    mail_to_raw = os.getenv("MAIL_TO", "")
+    mail_to = [t.strip() for t in mail_to_raw.split(",") if t.strip()]
+    if not mail_to:
+        raise EmailError("MAIL_TO no está configurada")
+
+    nombre   = (payload.get("nombre")   or "").strip()
+    email    = (payload.get("email")    or "").strip()
+    empresa  = (payload.get("empresa")  or "").strip()
+    caso_uso = (payload.get("caso_uso") or "").strip()
+    mensaje  = (payload.get("mensaje")  or "").strip()
 
     subject = f"[Monou.gg] Nueva solicitud de {nombre or 'sin nombre'}"
     body_text = (
@@ -92,7 +123,6 @@ def send_email(payload: dict) -> None:
         f"Caso de uso     : {caso_uso}\n"
         f"Mensaje         :\n{mensaje}\n"
     )
-
     body_html = f"""\
 <html>
   <body style="font-family: Inter, Arial, sans-serif; color:#0B0E14;">
@@ -108,36 +138,51 @@ def send_email(payload: dict) -> None:
   </body>
 </html>"""
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = formataddr(("Monou.gg Landing", mail_from))
-    msg["To"] = mail_to
+    body = {
+        "from": mail_from,
+        "to": mail_to,
+        "subject": subject,
+        "text": body_text,
+        "html": body_html,
+    }
     if email:
-        msg["Reply-To"] = email
-    msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain="monou.gg")
-    msg.set_content(body_text)
-    msg.add_alternative(body_html, subtype="html")
+        body["reply_to"] = email
 
-    context = ssl.create_default_context()
+    req = urllib.request.Request(
+        RESEND_ENDPOINT,
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "monou-landing-backend/1.0",
+        },
+        method="POST",
+    )
 
-    # Envuelve el envío en force_ipv4() porque la red de Render free tier
-    # tiene IPv6 roto en algunos contenedores (errno 101 ENETUNREACH).
     with force_ipv4():
-        if smtp_mode == "ssl" or smtp_port == 465:
-            # Puerto 465 - SSL implícito
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=20) as server:
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-        else:
-            # Puerto 587 - STARTTLS
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-                server.ehlo()
-                server.starttls(context=context)
-                server.ehlo()
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+                try:
+                    return json.loads(raw) if raw else {}
+                except json.JSONDecodeError:
+                    return {"raw": raw}
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            if e.code in (401, 403):
+                raise EmailAuthError(
+                    f"Resend rechazó la API key (HTTP {e.code}): {err_body}")
+            if e.code == 422:
+                raise EmailValidationError(
+                    f"Resend rechazó el correo (HTTP 422): {err_body}")
+            raise EmailError(f"Resend HTTP {e.code}: {err_body}")
+        except urllib.error.URLError as e:
+            raise EmailError(f"Error de red llamando a Resend: {e.reason}")
 
+
+# --------------------------------------------------------------------------
+# Endpoints HTTP
+# --------------------------------------------------------------------------
 
 def _client_meta(req):
     """Extrae IP, user-agent y referer del request (respetando X-Forwarded-For)."""
@@ -154,28 +199,33 @@ def _client_meta(req):
 def contact():
     data = request.get_json(silent=True) or request.form.to_dict()
 
-    # Validación mínima
     required = ["nombre", "email"]
     missing = [f for f in required if not (data.get(f) or "").strip()]
     if missing:
         return jsonify({"ok": False, "error": f"Campos requeridos: {', '.join(missing)}"}), 400
 
-    # Anti-bot: campo honeypot. Si viene relleno, fingimos éxito (sin guardar).
     if (data.get("website") or "").strip():
+        # Honeypot lleno: fingimos éxito sin tocar nada
         return jsonify({"ok": True}), 200
 
-    # 1) Persistir el contacto ANTES de enviar el correo. Si la DB falla
-    #    o está deshabilitada, contact_id queda en None y seguimos sin DB.
     contact_id = db.insert_contact(data, _client_meta(request))
 
-    # 2) Enviar correo
     try:
         send_email(data)
-    except smtplib.SMTPAuthenticationError as exc:
-        db.mark_status(contact_id, "failed", f"SMTPAuthenticationError: {exc}")
-        return jsonify({"ok": False, "error": "Autenticación SMTP fallida. Revisa SMTP_USER / App Password."}), 500
+    except EmailAuthError as exc:
+        app.logger.error("Resend auth: %s", exc)
+        db.mark_status(contact_id, "failed", str(exc))
+        return jsonify({"ok": False, "error": "Autenticación con el proveedor de correo fallida."}), 500
+    except EmailValidationError as exc:
+        app.logger.error("Resend validation: %s", exc)
+        db.mark_status(contact_id, "failed", str(exc))
+        return jsonify({"ok": False, "error": "El proveedor rechazó el correo (verifica dominio o destinatario)."}), 500
+    except EmailError as exc:
+        app.logger.error("Resend error: %s", exc)
+        db.mark_status(contact_id, "failed", str(exc))
+        return jsonify({"ok": False, "error": f"Error enviando correo: {exc}"}), 500
     except Exception as exc:
-        app.logger.exception("Error enviando correo")
+        app.logger.exception("Error inesperado enviando correo")
         db.mark_status(contact_id, "failed", str(exc))
         return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
 
@@ -189,12 +239,13 @@ def health():
         "ok": True,
         "service": "monou-contact",
         "db": db.is_enabled(),
+        "email_provider": "resend",
     }), 200
 
 
 @app.route("/api/contacts", methods=["GET"])
 def list_contacts():
-    """Lista los últimos contactos. Protegido con un Bearer token (ADMIN_TOKEN)."""
+    """Lista los últimos contactos. Protegido con Bearer token (ADMIN_TOKEN)."""
     token = os.getenv("ADMIN_TOKEN", "")
     auth = request.headers.get("Authorization", "")
     if not token or auth != f"Bearer {token}":
@@ -204,7 +255,6 @@ def list_contacts():
     except ValueError:
         limit = 100
     rows = db.list_contacts(limit=limit)
-    # serializar fechas
     for r in rows:
         if r.get("created_at"):
             r["created_at"] = r["created_at"].isoformat()

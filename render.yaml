@@ -17,27 +17,24 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: "587"
-      - key: SMTP_MODE
-        value: tls
-      - key: SMTP_USER
-        value: rladron@gmail.com
+      # --- Email (Resend) ---
+      # Sin dominio verificado: usa onboarding@resend.dev
+      # Con monou.gg verificado: cambia a "Monou.gg <contacto@monou.gg>"
       - key: MAIL_FROM
-        value: rladron@gmail.com
+        value: "Monou.gg Landing <onboarding@resend.dev>"
+      # En plan free de Resend SIN dominio verificado, MAIL_TO debe ser
+      # el email con el que registraste tu cuenta de Resend.
       - key: MAIL_TO
-        value: rodrigo.ladron@monou.gg
+        value: rladron@gmail.com
       - key: ALLOWED_ORIGIN
         value: "*"
-      # SMTP_PASSWORD: secret, se setea en el dashboard de Render
-      - key: SMTP_PASSWORD
+      # API key de Resend → secret en el dashboard de Render
+      - key: RESEND_API_KEY
         sync: false
-      # ADMIN_TOKEN: secret para listar contactos vía /api/contacts
+      # Token Bearer para listar contactos vía /api/contacts → secret
       - key: ADMIN_TOKEN
         sync: false
-      # Conexión a Postgres — Render inyecta el connection string aquí
+      # Postgres → Render lo inyecta automáticamente
       - key: DATABASE_URL
         fromDatabase:
           name: landing-contacto-db
