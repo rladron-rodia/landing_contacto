@@ -21,7 +21,21 @@
  */
 
 (function () {
-  const API_URL = window.MONOU_API_URL || "http://localhost:5000/api/contact";
+  // 1) Override explícito vía window.MONOU_API_URL
+  // 2) <meta name="api-url" content="...">
+  // 3) Auto-detección: localhost → flask local; prod → URL del backend en Render
+  function resolveApiUrl() {
+    if (window.MONOU_API_URL) return window.MONOU_API_URL;
+    const meta = document.querySelector('meta[name="api-url"]');
+    if (meta && meta.content) return meta.content.trim();
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host === "") {
+      return "http://localhost:5000/api/contact";
+    }
+    // URL pública del backend desplegado en Render
+    return "https://landing-contacto-backend.onrender.com/api/contact";
+  }
+  const API_URL = resolveApiUrl();
   const FORM_SELECTOR = "#ixmppy, form#ixmppy, [data-form='ixmppy']";
 
   function findForm() {

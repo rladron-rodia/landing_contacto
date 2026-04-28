@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: landing-contacto-backend
+    runtime: python
+    plan: free
+    rootDir: server
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT app:app
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_MODE
+        value: tls
+      - key: SMTP_USER
+        value: rladron@gmail.com
+      - key: MAIL_FROM
+        value: rladron@gmail.com
+      - key: MAIL_TO
+        value: rodrigo.ladron@monou.gg
+      - key: ALLOWED_ORIGIN
+        value: "*"
+      # SMTP_PASSWORD se configura como secret en el dashboard de Render
+      - key: SMTP_PASSWORD
+        sync: false
