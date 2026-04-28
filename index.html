@@ -489,7 +489,8 @@
             metadata interna de nuestros títulos propios. Datos de primera mano
             con profundidad sin precedentes.</p>
         </div>
-        <div class="carousel-container relative">
+        
+        <div class="carousel-container relative hidden md:block">
           <div onclick="moveCarousel(-1)" class="carousel-btn prev"><i
               class="fa-solid fa-chevron-left text-white"></i></div>
           <div onclick="moveCarousel(1)" class="carousel-btn next"><i
@@ -556,7 +557,8 @@
                   </div>
                 </div>
               </div>
-            </div><!-- Slide 2: Strategy -->
+            </div>
+            <!-- Slide 2: Strategy -->
             <div class="carousel-item">
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div
@@ -619,7 +621,8 @@
                   </div>
                 </div>
               </div>
-            </div><!-- Slide 3: Puzzle -->
+            </div>
+            <!-- Slide 3: Puzzle -->
             <div class="carousel-item">
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div
@@ -683,7 +686,8 @@
                   </div>
                 </div>
               </div>
-            </div><!-- Slide 4: Catalog -->
+            </div>
+            <!-- Slide 4: Catalog -->
             <div class="carousel-item">
               <div class="flex items-center justify-center h-full">
                 <div
@@ -716,6 +720,130 @@
             <div onclick="goToSlide(1)" class="carousel-indicator"></div>
             <div onclick="goToSlide(2)" class="carousel-indicator"></div>
             <div onclick="goToSlide(3)" class="carousel-indicator"></div>
+          </div>
+        </div>
+
+        <div class="md:hidden overflow-x-auto -mx-6 px-6 pb-4" style="scrollbar-width: none; -ms-overflow-style: none;">
+          <div class="flex gap-4" style="width: max-content;">
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-brand-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <img src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png" alt="Aventura" class="w-full h-full object-cover">
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Aventure</h4>
+              <p data-es="Combate en tiempo real, inventario, progresión" data-en="Real-time combat, inventory, progression" class="text-xs text-gray-400 mb-2">Combate en tiempo real, inventario, progresión</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="250K sesiones" data-en="250K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">250K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">1080p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-red-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <img src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png" alt="Simulación" class="w-full h-full object-cover">
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Simulate</h4>
+              <p data-es="Aventura épica, sistema de misiones" data-en="Epic adventure, quest system" class="text-xs text-gray-400 mb-2">Aventura épica, sistema de misiones</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="180K sesiones" data-en="180K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">180K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">1080p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-yellow-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <img src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png" alt="Puzzle" class="w-full h-full object-cover">
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Puzzle</h4>
+              <p data-es="Exploración de mazmorras, loot" data-en="Dungeon exploration, loot" class="text-xs text-gray-400 mb-2">Exploración de mazmorras, loot</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="320K sesiones" data-en="320K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">320K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">1080p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-accent-cyan/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <i class="fa-solid fa-chess text-3xl text-accent-cyan"></i>
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Estratégia</h4>
+              <p data-es="Decisiones tácticas, gestión de recursos" data-en="Tactical decisions, resource management" class="text-xs text-gray-400 mb-2">Decisiones tácticas, gestión de recursos</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="180K sesiones" data-en="180K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">180K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">1080p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-green-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <i class="fa-solid fa-globe text-3xl text-green-400"></i>
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Runner</h4>
+              <p data-es="Construcción de imperios, diplomacia" data-en="Empire building, diplomacy" class="text-xs text-gray-400 mb-2">Construcción de imperios, diplomacia</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="210K sesiones" data-en="210K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">210K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">1080p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-blue-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <i class="fa-solid fa-tower-observation text-3xl text-blue-400"></i>
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Tower Defense</h4>
+              <p data-es="Defensa estratégica, oleadas enemigas" data-en="Strategic defense, enemy waves" class="text-xs text-gray-400 mb-2">Defensa estratégica, oleadas enemigas</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="290K sesiones" data-en="290K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">290K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">720p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-accent-purple/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <i class="fa-solid fa-puzzle-piece text-3xl text-accent-purple"></i>
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Puzzle Arcade</h4>
+              <p data-es="Mecánicas de match-3, power-ups, niveles" data-en="Match-3 mechanics, power-ups, levels" class="text-xs text-gray-400 mb-2">Mecánicas de match-3, power-ups, niveles</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="420K sesiones" data-en="420K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">420K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">720p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-pink-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <i class="fa-solid fa-brain text-3xl text-pink-400"></i>
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Logic Puzzles</h4>
+              <p data-es="Rompecabezas lógicos, desafíos mentales" data-en="Logic puzzles, mental challenges" class="text-xs text-gray-400 mb-2">Rompecabezas lógicos, desafíos mentales</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="350K sesiones" data-en="350K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">350K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">720p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
+              <div class="aspect-video bg-gradient-to-br from-orange-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                <i class="fa-solid fa-cube text-3xl text-orange-400"></i>
+              </div>
+              <h4 class="text-sm font-bold text-white mb-1">Block Puzzle</h4>
+              <p data-es="Tetris-style, rotación de piezas" data-en="Tetris-style, piece rotation" class="text-xs text-gray-400 mb-2">Tetris-style, rotación de piezas</p>
+              <div class="flex items-center gap-2 text-xs">
+                <span data-es="480K sesiones" data-en="480K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">480K sesiones</span>
+                <span class="px-2 py-1 bg-dark-800 rounded text-gray-400">720p</span>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-6 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0 flex flex-col items-center justify-center text-center">
+              <div class="w-16 h-16 mx-auto bg-gradient-to-br from-brand-500/20 to-accent-cyan/20 rounded-xl flex items-center justify-center mb-4">
+                <i class="fa-solid fa-grid-2-plus text-2xl text-transparent bg-clip-text bg-gradient-to-br from-brand-400 to-accent-cyan"></i>
+              </div>
+              <h3 data-es="+200 Juegos Disponibles" data-en="+200 Available Games" class="text-base font-bold text-white mb-2">+200 Juegos Disponibles</h3>
+              <p data-es="Explora nuestro catálogo completo" data-en="Explore our complete catalog" class="text-xs text-gray-400 mb-3">Explora nuestro catálogo completo</p>
+              <div class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-500 to-accent-cyan text-white text-xs font-semibold rounded-lg">
+                <span data-es="Ver Catálogo" data-en="View Catalog">Ver Catálogo</span>
+                <i class="fa-solid fa-arrow-right text-xs"></i>
+              </div>
+            </div>
           </div>
         </div>
       </section><!-- JUEGOS DE TERCEROS -->
@@ -1033,19 +1161,19 @@
               se pondrá en contacto contigo para discutir tus necesidades de
               datos de entrenamiento.</p>
           </div>
-          <form id="ixmppy" action="javascript:void(0)" method="POST"
-            class="space-y-6">
+          <form action="mailto:rodrigo.ladron@monou.gg" method="POST"
+            enctype="text/plain" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-2"><label data-es="Nombre completo"
                   data-en="Full name"
                   class="text-sm font-medium text-gray-300">Nombre
-                  completo</label><input name="nombre" type="text" required placeholder="Ej. Jane Doe"
+                  completo</label><input type="text" placeholder="Ej. Jane Doe"
                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
               </div>
               <div class="space-y-2"><label data-es="Email corporativo"
                   data-en="Corporate email"
                   class="text-sm font-medium text-gray-300">Email
-                  corporativo</label><input name="email" type="email" required
+                  corporativo</label><input type="email"
                   placeholder="jane@empresa.ai"
                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
               </div>
@@ -1053,16 +1181,14 @@
             <div class="space-y-2"><label data-es="Empresa / Organización"
                 data-en="Company / Organization"
                 class="text-sm font-medium text-gray-300">Empresa /
-                Organización</label><input name="empresa" type="text"
+                Organización</label><input type="text"
                 placeholder="Nombre de tu laboratorio o startup"
                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
             </div>
-            <!-- honeypot anti-bot -->
-            <input name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
             <div class="space-y-2"><label data-es="Caso de uso principal"
                 data-en="Main use case"
                 class="text-sm font-medium text-gray-300">Caso de uso
-                principal</label><select name="caso_uso"
+                principal</label><select
                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all appearance-none">
                 <option value="" disabled="" selected=""
                   data-es="Selecciona una opción" data-en="Select an option">
@@ -1086,7 +1212,7 @@
             <div class="space-y-2"><label data-es="Mensaje adicional (Opcional)"
                 data-en="Additional message (Optional)"
                 class="text-sm font-medium text-gray-300">Mensaje adicional
-                (Opcional)</label><textarea name="mensaje" rows="4" placeholder="Cuéntanos más sobre el volumen de datos o juegos específicos que buscas..." class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none"></textarea>
+                (Opcional)</label><textarea rows="4" placeholder="Cuéntanos más sobre el volumen de datos o juegos específicos que buscas..." class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none"></textarea>
             </div><button type="submit"
               class="w-full py-4 bg-white text-dark-900 font-bold rounded-xl hover:bg-gray-100 transition-colors mt-4 flex items-center justify-center gap-2"><span
                 data-es="Enviar Solicitud" data-en="Send Request">Enviar
@@ -1263,9 +1389,6 @@
         });
       });
     </script>
-    <!-- Override opcional de la URL del backend (déjalo comentado en prod):
-         <meta name="api-url" content="https://tu-backend.onrender.com/api/contact"> -->
-    <script src="server/contact-form.js" defer></script>
   </body>
 
 </html>
