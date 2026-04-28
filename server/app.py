@@ -42,8 +42,11 @@ def send_email(payload: dict) -> None:
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_mode = os.getenv("SMTP_MODE", "tls").lower()
-    smtp_user = os.environ["SMTP_USER"]
-    smtp_pass = os.environ["SMTP_PASSWORD"]
+    smtp_user = os.environ["SMTP_USER"].strip()
+    # Limpia App Passwords copiadas con espacios (incluido \xa0 non-breaking
+    # space que Google introduce en su UI). Gmail acepta los 16 chars pegados.
+    raw_pass = os.environ["SMTP_PASSWORD"]
+    smtp_pass = "".join(raw_pass.split())  # quita TODO whitespace (incl. \xa0)
     mail_to = os.getenv("MAIL_TO", smtp_user)
     mail_from = os.getenv("MAIL_FROM", smtp_user)
 
