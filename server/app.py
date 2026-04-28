@@ -18,8 +18,10 @@ https://myaccount.google.com/apppasswords (requiere verificación en 2 pasos).
 """
 
 import os
+import socket
 import smtplib
 import ssl
+from contextlib import contextmanager
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
@@ -28,6 +30,25 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 import db  # módulo de persistencia (degrada a no-op si DATABASE_URL no está)
+
+
+@contextmanager
+def force_ipv4():
+    """Filtra getaddrinfo a IPv4 solamente durante el bloque.
+
+    Algunos hosts de Render anuncian IPv6 vía DNS pero la red del contenedor
+    no tiene ruta IPv6 de salida → smtplib intenta la dirección AAAA y falla
+    con `OSError: [Errno 101] Network is unreachable`. Forzando IPv4 evitamos
+    el problema y conectamos por la ruta que sí funciona.
+    """
+    original = socket.getaddrinfo
+    def _ipv4_only(*args, **kwargs):
+        return [r for r in original(*args, **kwargs) if r[0] == socket.AF_INET]
+    socket.getaddrinfo = _ipv4_only
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = original
 
 load_dotenv()
 
@@ -100,19 +121,22 @@ def send_email(payload: dict) -> None:
 
     context = ssl.create_default_context()
 
-    if smtp_mode == "ssl" or smtp_port == 465:
-        # Puerto 465 - SSL implícito
-        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=20) as server:
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-    else:
-        # Puerto 587 - STARTTLS
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
+    # Envuelve el envío en force_ipv4() porque la red de Render free tier
+    # tiene IPv6 roto en algunos contenedores (errno 101 ENETUNREACH).
+    with force_ipv4():
+        if smtp_mode == "ssl" or smtp_port == 465:
+            # Puerto 465 - SSL implícito
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=20) as server:
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        else:
+            # Puerto 587 - STARTTLS
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
 
 
 def _client_meta(req):
