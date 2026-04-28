@@ -24,11 +24,11 @@ services:
       - key: SMTP_MODE
         value: tls
       - key: SMTP_USER
-        value: rladron@gmail.com
+        value: contacto@monou.gg
       - key: MAIL_FROM
-        value: rladron@gmail.com
+        value: contacto@monou.gg
       - key: MAIL_TO
-        value: rodrigo.ladron@monou.gg
+        value: contacto@monou.gg
       - key: ALLOWED_ORIGIN
         value: "*"
       # SMTP_PASSWORD: secret, se setea en el dashboard de Render
