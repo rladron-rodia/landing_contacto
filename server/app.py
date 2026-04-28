@@ -27,6 +27,8 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+import db  # módulo de persistencia (degrada a no-op si DATABASE_URL no está)
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -35,6 +37,9 @@ ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
 # Permitir múltiples orígenes separados por coma (ej "http://localhost:8000,https://monou.gg")
 _origins = [o.strip() for o in ALLOWED_ORIGIN.split(",")] if ALLOWED_ORIGIN != "*" else "*"
 CORS(app, resources={r"/api/*": {"origins": _origins}}, supports_credentials=False)
+
+# Inicializa el schema de la DB al boot (idempotente, no falla si no hay DB)
+db.init_schema()
 
 
 def send_email(payload: dict) -> None:
@@ -110,6 +115,17 @@ def send_email(payload: dict) -> None:
             server.send_message(msg)
 
 
+def _client_meta(req):
+    """Extrae IP, user-agent y referer del request (respetando X-Forwarded-For)."""
+    fwd = req.headers.get("X-Forwarded-For", "")
+    ip = (fwd.split(",")[0].strip() if fwd else req.remote_addr) or None
+    return {
+        "ip": ip,
+        "user_agent": req.headers.get("User-Agent"),
+        "referer": req.headers.get("Referer"),
+    }
+
+
 @app.route("/api/contact", methods=["POST"])
 def contact():
     data = request.get_json(silent=True) or request.form.to_dict()
@@ -120,24 +136,55 @@ def contact():
     if missing:
         return jsonify({"ok": False, "error": f"Campos requeridos: {', '.join(missing)}"}), 400
 
-    # Anti-bot: campo honeypot. Si viene relleno, fingimos éxito.
+    # Anti-bot: campo honeypot. Si viene relleno, fingimos éxito (sin guardar).
     if (data.get("website") or "").strip():
         return jsonify({"ok": True}), 200
 
+    # 1) Persistir el contacto ANTES de enviar el correo. Si la DB falla
+    #    o está deshabilitada, contact_id queda en None y seguimos sin DB.
+    contact_id = db.insert_contact(data, _client_meta(request))
+
+    # 2) Enviar correo
     try:
         send_email(data)
-    except smtplib.SMTPAuthenticationError:
+    except smtplib.SMTPAuthenticationError as exc:
+        db.mark_status(contact_id, "failed", f"SMTPAuthenticationError: {exc}")
         return jsonify({"ok": False, "error": "Autenticación SMTP fallida. Revisa SMTP_USER / App Password."}), 500
     except Exception as exc:
         app.logger.exception("Error enviando correo")
+        db.mark_status(contact_id, "failed", str(exc))
         return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
 
-    return jsonify({"ok": True, "message": "Correo enviado"}), 200
+    db.mark_status(contact_id, "emailed")
+    return jsonify({"ok": True, "message": "Correo enviado", "id": contact_id}), 200
 
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"ok": True, "service": "monou-contact"}), 200
+    return jsonify({
+        "ok": True,
+        "service": "monou-contact",
+        "db": db.is_enabled(),
+    }), 200
+
+
+@app.route("/api/contacts", methods=["GET"])
+def list_contacts():
+    """Lista los últimos contactos. Protegido con un Bearer token (ADMIN_TOKEN)."""
+    token = os.getenv("ADMIN_TOKEN", "")
+    auth = request.headers.get("Authorization", "")
+    if not token or auth != f"Bearer {token}":
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    try:
+        limit = min(int(request.args.get("limit", 100)), 1000)
+    except ValueError:
+        limit = 100
+    rows = db.list_contacts(limit=limit)
+    # serializar fechas
+    for r in rows:
+        if r.get("created_at"):
+            r["created_at"] = r["created_at"].isoformat()
+    return jsonify({"ok": True, "count": len(rows), "contacts": rows}), 200
 
 
 if __name__ == "__main__":

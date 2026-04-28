@@ -1,3 +1,9 @@
+databases:
+  - name: landing-contacto-db
+    plan: free
+    databaseName: monou_contacts
+    user: monou
+
 services:
   - type: web
     name: landing-contacto-backend
@@ -25,6 +31,14 @@ services:
         value: rodrigo.ladron@monou.gg
       - key: ALLOWED_ORIGIN
         value: "*"
-      # SMTP_PASSWORD se configura como secret en el dashboard de Render
+      # SMTP_PASSWORD: secret, se setea en el dashboard de Render
       - key: SMTP_PASSWORD
         sync: false
+      # ADMIN_TOKEN: secret para listar contactos vía /api/contacts
+      - key: ADMIN_TOKEN
+        sync: false
+      # Conexión a Postgres — Render inyecta el connection string aquí
+      - key: DATABASE_URL
+        fromDatabase:
+          name: landing-contacto-db
+          property: connectionString

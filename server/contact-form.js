@@ -1,29 +1,27 @@
 /**
- * contact-form.js
+ * contact-form.js — Blindaje de integración SMTP independiente del HTML.
  *
- * Conecta el formulario del frame "ixmppy" (sección #contacto) con el backend
- * Flask que envía el correo vía SMTP de Gmail.
+ * Este script se conecta al formulario de contacto y lo enruta al backend
+ * SMTP, SIN depender de detalles concretos del marcado. Sobrevive a:
  *
- * Cómo usar en el HTML:
- *   1) Asegúrate de que tu <form> tenga id="ixmppy" o reemplaza el selector.
- *   2) Asegúrate de que cada <input>/<select>/<textarea> tenga el atributo
- *      name="..." correspondiente:
- *         - name="nombre"
- *         - name="email"
- *         - name="empresa"
- *         - name="caso_uso"
- *         - name="mensaje"
- *      (Opcional) un input oculto name="website" como honeypot anti-bot.
- *   3) Antes de </body> añade:
- *         <script src="server/contact-form.js" defer></script>
+ *   - Cambios visuales en la landing (clases, layout, colores)
+ *   - Re-exports desde herramientas como Framer/Webflow que pisan ids/names
+ *   - Eliminación accidental del atributo `action="javascript:void(0)"`
+ *     (lo reimpone en cada submit, para que jamás caiga al `mailto:` viejo)
+ *   - Inyección dinámica del formulario tras la carga (MutationObserver)
  *
- * Configuración: cambia API_URL si el backend corre en otro host/puerto.
+ * Único requisito mínimo del HTML: que exista un `<form>` con al menos un
+ * input de tipo email y un botón de submit. Todo lo demás se autodetecta.
+ *
+ * Configuración:
+ *   - <meta name="api-url" content="https://...">  (override explícito)
+ *   - window.MONOU_API_URL = "..."                (override en runtime)
+ *   - Auto: localhost → http://localhost:5000/api/contact
+ *           prod      → https://landing-contacto-backend.onrender.com/api/contact
  */
 
 (function () {
-  // 1) Override explícito vía window.MONOU_API_URL
-  // 2) <meta name="api-url" content="...">
-  // 3) Auto-detección: localhost → flask local; prod → URL del backend en Render
+  // ---------- 1. Resolución de URL del backend ----------
   function resolveApiUrl() {
     if (window.MONOU_API_URL) return window.MONOU_API_URL;
     const meta = document.querySelector('meta[name="api-url"]');
@@ -32,31 +30,111 @@
     if (host === "localhost" || host === "127.0.0.1" || host === "") {
       return "http://localhost:5000/api/contact";
     }
-    // URL pública del backend desplegado en Render
     return "https://landing-contacto-backend.onrender.com/api/contact";
   }
   const API_URL = resolveApiUrl();
-  const FORM_SELECTOR = "#ixmppy, form#ixmppy, [data-form='ixmppy']";
 
+  // ---------- 2. Localización del formulario (con fallbacks) ----------
   function findForm() {
-    // 1) Por id/selector explícito
-    let form = document.querySelector(FORM_SELECTOR);
-    if (form && form.tagName === "FORM") return form;
+    // 2.1 ID/selector explícito
+    const explicit = document.querySelector(
+      "#ixmppy, form[data-form='ixmppy'], form[data-contact-form]"
+    );
+    if (explicit && explicit.tagName === "FORM") return explicit;
 
-    // 2) Fallback: el primer form dentro de la sección de contacto
-    const contactSection =
+    // 2.2 Form dentro de la sección de contacto
+    const section =
       document.getElementById("contacto") ||
       document.getElementById("contact") ||
       document.querySelector("[data-section='contacto']");
-    if (contactSection) {
-      form = contactSection.querySelector("form");
-      if (form) return form;
+    if (section) {
+      const f = section.querySelector("form");
+      if (f) return f;
     }
 
-    // 3) Último recurso: el primer form de la página
-    return document.querySelector("form");
+    // 2.3 Cualquier form con botón "Enviar/Submit/Send"
+    const forms = document.querySelectorAll("form");
+    for (const f of forms) {
+      const btn = f.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+      if (btn) {
+        const t = (btn.textContent || btn.value || "").toLowerCase();
+        if (/(enviar|solicit|send|submit|contactar)/.test(t)) return f;
+      }
+    }
+
+    // 2.4 Si hay UN único form en la página, ese es
+    if (forms.length === 1) return forms[0];
+
+    return null;
   }
 
+  // ---------- 3. Localización de campos por heurística ----------
+  function findField(form, kind) {
+    // Preferencia 1: atributo name explícito
+    const byName = form.querySelector(`[name="${kind}"]`);
+    if (byName) return byName;
+
+    const fields = form.querySelectorAll("input, select, textarea");
+    const matches = (el, regex) => {
+      const blob = [
+        el.name, el.id, el.placeholder, el.getAttribute("aria-label"),
+        // Texto de la <label> asociada
+        (el.labels && el.labels[0] && el.labels[0].textContent) || "",
+        // data-* (Framer suele añadir data-es / data-en)
+        el.dataset.es || "", el.dataset.en || ""
+      ].join(" ").toLowerCase();
+      return regex.test(blob);
+    };
+
+    switch (kind) {
+      case "nombre": {
+        for (const el of fields) {
+          if (el.tagName === "INPUT" && el.type === "text" &&
+              matches(el, /(nombre|full name|first name)/)) return el;
+        }
+        // Primer text input del form
+        return form.querySelector('input[type="text"]') || null;
+      }
+      case "email": {
+        return form.querySelector('input[type="email"]') ||
+               [...fields].find(el => matches(el, /(email|e-mail|correo)/)) || null;
+      }
+      case "empresa": {
+        for (const el of fields) {
+          if (el.tagName === "INPUT" && el.type === "text" &&
+              matches(el, /(empresa|company|organi[sz]a)/)) return el;
+        }
+        return null;
+      }
+      case "caso_uso": {
+        return form.querySelector("select") ||
+               [...fields].find(el => matches(el, /(caso|use case|asunto|subject)/)) || null;
+      }
+      case "mensaje": {
+        return form.querySelector("textarea") ||
+               [...fields].find(el => matches(el, /(mensaje|message|comentario|comments)/)) || null;
+      }
+      case "website": {
+        return form.querySelector('[name="website"]'); // honeypot
+      }
+    }
+    return null;
+  }
+
+  function val(el) { return el ? (el.value || "").trim() : ""; }
+
+  function collect(form) {
+    return {
+      nombre:   val(findField(form, "nombre")),
+      email:    val(findField(form, "email")),
+      empresa:  val(findField(form, "empresa")),
+      caso_uso: val(findField(form, "caso_uso")),
+      mensaje:  val(findField(form, "mensaje")),
+      website:  val(findField(form, "website")),
+    };
+  }
+
+  // ---------- 4. UI helpers ----------
   function setStatus(form, message, type) {
     let box = form.querySelector("[data-status]");
     if (!box) {
@@ -70,38 +148,24 @@
       type === "error" ? "#ef4444" : type === "ok" ? "#14b8a6" : "#9ca3af";
   }
 
-  function getValueByNameOrIndex(form, name, fallbackIndex) {
-    const byName = form.querySelector(`[name="${name}"]`);
-    if (byName) return byName.value || "";
-    // Fallback por orden de aparición si los inputs no tienen name
-    const fields = form.querySelectorAll("input, select, textarea");
-    return fields[fallbackIndex] ? fields[fallbackIndex].value || "" : "";
-  }
+  // ---------- 5. Bind del submit (idempotente) ----------
+  function bind(form) {
+    if (form.dataset.contactFormBound === "1") return;
+    form.dataset.contactFormBound = "1";
 
-  function collect(form) {
-    return {
-      nombre: getValueByNameOrIndex(form, "nombre", 0).trim(),
-      email: getValueByNameOrIndex(form, "email", 1).trim(),
-      empresa: getValueByNameOrIndex(form, "empresa", 2).trim(),
-      caso_uso: getValueByNameOrIndex(form, "caso_uso", 3).trim(),
-      mensaje: getValueByNameOrIndex(form, "mensaje", 4).trim(),
-      website: getValueByNameOrIndex(form, "website", 99).trim(), // honeypot
-    };
-  }
-
-  function init() {
-    const form = findForm();
-    if (!form) {
-      console.warn("[contact-form] No se encontró el formulario.");
-      return;
-    }
-
-    // Evita el envío nativo a mailto:
-    form.setAttribute("action", "javascript:void(0)");
+    // Neutralizar action por si vuelve un mailto: tras un re-render
     form.setAttribute("method", "POST");
+    if ((form.getAttribute("action") || "").toLowerCase().startsWith("mailto:") ||
+        !form.getAttribute("action")) {
+      form.setAttribute("action", "javascript:void(0)");
+    }
 
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
+      // Re-blindar action en cada submit por si algo lo modificó
+      if ((form.getAttribute("action") || "").toLowerCase().startsWith("mailto:")) {
+        form.setAttribute("action", "javascript:void(0)");
+      }
 
       const data = collect(form);
 
@@ -110,7 +174,7 @@
         return;
       }
 
-      const submitBtn = form.querySelector('button[type="submit"], button:not([type])');
+      const submitBtn = form.querySelector('button[type="submit"], button:not([type]), input[type="submit"]');
       const originalLabel = submitBtn ? submitBtn.innerHTML : "";
       if (submitBtn) {
         submitBtn.disabled = true;
@@ -126,15 +190,11 @@
           body: JSON.stringify(data),
         });
         const json = await res.json().catch(() => ({}));
-
-        if (!res.ok || !json.ok) {
-          throw new Error(json.error || `Error HTTP ${res.status}`);
-        }
-
+        if (!res.ok || !json.ok) throw new Error(json.error || `Error HTTP ${res.status}`);
         setStatus(form, "¡Gracias! Tu solicitud fue enviada correctamente.", "ok");
         form.reset();
       } catch (err) {
-        console.error("[contact-form] Error:", err);
+        console.error("[contact-form]", err);
         setStatus(
           form,
           "No se pudo enviar la solicitud. Intenta de nuevo o escríbenos directamente.",
@@ -147,6 +207,25 @@
         }
       }
     });
+  }
+
+  function tryBind() {
+    const form = findForm();
+    if (form) bind(form);
+    return !!form;
+  }
+
+  // ---------- 6. Init + observer para HTML que cambia en runtime ----------
+  function init() {
+    if (tryBind()) return;
+    // Si aún no aparece el form (frameworks que renderizan asíncrono),
+    // observa el DOM y reintenta cuando aparezca.
+    const observer = new MutationObserver(() => {
+      if (tryBind()) observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    // Por seguridad, deja de observar tras 30s
+    setTimeout(() => observer.disconnect(), 30000);
   }
 
   if (document.readyState === "loading") {
