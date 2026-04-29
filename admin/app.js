@@ -7,7 +7,15 @@
 
 (function () {
   // ---------- Config ----------
+  // Resolución del backend (en orden de prioridad):
+  //  1. Query param ?api=https://...  (útil para testear ramas locales contra prod)
+  //  2. <meta name="api-base" content="...">
+  //  3. Auto: localhost → http://localhost:5000 ; prod → backend en Render
   const API_BASE = (function () {
+    const qp = new URLSearchParams(window.location.search).get("api");
+    if (qp) return qp.replace(/\/$/, "");
+    const meta = document.querySelector('meta[name="api-base"]');
+    if (meta && meta.content) return meta.content.trim().replace(/\/$/, "");
     const host = window.location.hostname;
     if (host === "localhost" || host === "127.0.0.1" || host === "") {
       return "http://localhost:5000";
