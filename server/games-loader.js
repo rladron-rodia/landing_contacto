@@ -49,9 +49,16 @@
   }
 
   function updateCard(card, game, lang) {
-    // Title
+    // Title (con i18n: actualiza data-es/data-en y textContent según el idioma)
     const titleEl = card.querySelector('[data-game-field="title"]');
-    if (titleEl && game.title) titleEl.textContent = game.title;
+    if (titleEl) {
+      const tEs = game.title_es || game.title;
+      const tEn = game.title_en || game.title;
+      if (tEs) titleEl.setAttribute("data-es", tEs);
+      if (tEn) titleEl.setAttribute("data-en", tEn);
+      const text = (lang === "en" ? tEn : tEs) || game.title;
+      if (text) titleEl.textContent = text;
+    }
 
     // Description
     const descEl = card.querySelector('[data-game-field="description"]');
