@@ -228,6 +228,12 @@ SITE_LINKS_SEED = [
      "",
      "Licencias de Datos", "Data Licenses",
      11),
+    ("dataset_badge",
+     "Badge del hero que anuncia la versión del dataset. Cambia label_es y label_en cuando saques una nueva release (ej: 'Dataset v2.1 ya disponible' / 'Dataset v2.1 now available'). El campo URL no se usa.",
+     "",  # sin URL — es solo un badge informativo
+     "",  # sin imagen
+     "Dataset v2.0 ya disponible", "Dataset v2.0 now available",
+     20),
 ]
 
 # Datos iniciales de delivery_options (Data Formats + Delivery Methods).
