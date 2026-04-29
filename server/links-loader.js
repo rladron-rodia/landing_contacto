@@ -62,13 +62,28 @@
     // 2. CTA / link — busca [data-link-field="cta"] o aplica al container completo
     if (link.url) {
       const ctaEl = container.querySelector('[data-link-field="cta"]') || container;
-      ctaEl.classList.add("cursor-pointer");
-      ctaEl.dataset.linkUrl = link.url;
-      ctaEl.onclick = (e) => {
-        // Evitar disparar si el click viene de otro link/botón anidado
-        if (e.target !== ctaEl && e.target.closest('a[href], button')) return;
-        window.open(link.url, "_blank", "noopener,noreferrer");
-      };
+      const isAnchor = ctaEl.tagName === "A";
+      const isExternal = /^https?:\/\//i.test(link.url);
+
+      if (isAnchor) {
+        // Es un <a> → actualizar el href para que el browser navegue normalmente
+        ctaEl.setAttribute("href", link.url);
+        if (isExternal) {
+          ctaEl.setAttribute("target", "_blank");
+          ctaEl.setAttribute("rel", "noopener noreferrer");
+        } else {
+          ctaEl.removeAttribute("target");
+          ctaEl.removeAttribute("rel");
+        }
+      } else {
+        // Para divs/botones: simular el click con window.open (nueva pestaña)
+        ctaEl.classList.add("cursor-pointer");
+        ctaEl.dataset.linkUrl = link.url;
+        ctaEl.onclick = (e) => {
+          if (e.target !== ctaEl && e.target.closest('a[href], button')) return;
+          window.open(link.url, "_blank", "noopener,noreferrer");
+        };
+      }
     }
 
     // 3. Labels (opcional) — actualiza data-es / data-en si vienen del backend
