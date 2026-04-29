@@ -1225,18 +1225,30 @@
       if (e.target === m && downOnBackdrop) closeAllModals();
       downOnBackdrop = false;
     });
-    // Right-click (context menu) en el backdrop NO debe cerrar
-    m.addEventListener("contextmenu", (e) => {
-      // Si el contextmenu es sobre un input/textarea/select, dejar pasar
-      // (el browser muestra Cortar/Copiar/Pegar nativos)
-      const t = e.target;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) {
-        // No prevent default; permite que el menú nativo aparezca
-        return;
+
+    // Cualquier evento de teclado que ocurra dentro del modal NO debe
+    // burbujear al document. Así protegemos contra cualquier handler global
+    // (presente o futuro) que pudiera reaccionar a Cmd/Ctrl/Alt + tecla.
+    // Específicamente ignoramos aquí cualquier keydown con modificadores
+    // (Cmd+C, Cmd+V, Cmd+X, Cmd+A, etc.) y la dejamos pasar al browser
+    // para que maneje el shortcut nativamente.
+    m.addEventListener("keydown", (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        // Permitir el shortcut del browser, pero parar la propagación al
+        // document por si algún handler global se confunde
+        e.stopPropagation();
       }
     });
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAllModals(); });
+
+  // Handler global de Escape — SOLO cierra si NO hay modificadores y la
+  // tecla es exactamente Escape (no, por ejemplo, Cmd presionada con
+  // mapping raro de algún teclado).
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    closeAllModals();
+  });
 
   // ---------- Boot ----------
   if (getToken()) showApp();
