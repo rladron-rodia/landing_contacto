@@ -1,8 +1,90 @@
-<html lang="en"><head>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<html lang="es"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monou.gg - AI Dataset Training Landing Page</title>
+
+    <!-- ═══ SEO Primary ═══ -->
+    <title>Gameplay Datasets para IA y World Models | Monou Labs</title>
+    <meta name="description" content="+10K horas de gameplay capturado, curado y etiquetado. Datasets para Reinforcement Learning, Behavior Cloning y World Models. Juegos F2P y AAA. Entrega vía S3 o API REST.">
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="Monou Labs">
+    <meta name="keywords" content="dataset gameplay para IA, gameplay dataset for AI, reinforcement learning dataset, behavior cloning dataset, world model training data, datos entrenamiento IA, telemetria gameplay, video game AI dataset">
+    <link rel="canonical" href="https://rladron-rodia.github.io/landing_contacto/">
+
+    <!-- ═══ Hreflang bilingüe (toggle ES/EN dinámico en la misma URL) ═══ -->
+    <link rel="alternate" hreflang="es" href="https://rladron-rodia.github.io/landing_contacto/">
+    <link rel="alternate" hreflang="en" href="https://rladron-rodia.github.io/landing_contacto/?lang=en">
+    <link rel="alternate" hreflang="x-default" href="https://rladron-rodia.github.io/landing_contacto/">
+
+    <!-- ═══ Open Graph (LinkedIn, Slack, Facebook) ═══ -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://rladron-rodia.github.io/landing_contacto/">
+    <meta property="og:title" content="Gameplay Datasets para IA y World Models | Monou Labs">
+    <meta property="og:description" content="+10K horas de gameplay curado para entrenar agentes de IA. Datasets para Reinforcement Learning y Behavior Cloning con telemetría completa.">
+    <meta property="og:image" content="https://rladron-rodia.github.io/landing_contacto/og-preview.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Monou Labs — Gameplay Datasets para entrenar agentes de IA">
+    <meta property="og:locale" content="es_MX">
+    <meta property="og:locale:alternate" content="en_US">
+    <meta property="og:site_name" content="Monou Labs">
+
+    <!-- ═══ Twitter Card (X / algunas vistas de Slack) ═══ -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Gameplay Datasets for AI Training | Monou Labs">
+    <meta name="twitter:description" content="+10K hours of curated gameplay data for training AI agents. Datasets for RL, Behavior Cloning, World Models.">
+    <meta name="twitter:image" content="https://rladron-rodia.github.io/landing_contacto/og-preview.png">
+
+    <!-- ═══ Performance hints — preconnect a CDN/S3 + Google Fonts ═══ -->
+    <link rel="preconnect" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
+    <link rel="dns-prefetch" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://landing-contacto-backend.onrender.com">
+
+    <!-- ═══ Favicon ═══ -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎮%3C/text%3E%3C/svg%3E">
+
+    <!-- ═══ Schema.org Dataset (Google Dataset Search — canal zero-competencia) ═══ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org/",
+      "@type": "Dataset",
+      "name": "Gameplay Dataset for AI Training — Monou Labs",
+      "alternateName": "Gameplay Datasets para Entrenamiento de IA — Monou Labs",
+      "description": "10,000+ hours of gameplay captured, curated and labeled for training AI agents. Frame-by-frame annotations, input telemetry and event segmentation. Covers 50+ F2P and AAA titles.",
+      "url": "https://rladron-rodia.github.io/landing_contacto/",
+      "keywords": [
+        "gameplay dataset",
+        "AI training data",
+        "reinforcement learning dataset",
+        "behavior cloning data",
+        "world model training",
+        "game telemetry",
+        "video game AI",
+        "datos de entrenamiento IA",
+        "dataset de gameplay",
+        "aprendizaje por refuerzo"
+      ],
+      "inLanguage": ["es", "en"],
+      "creator": {
+        "@type": "Organization",
+        "name": "Monou Labs",
+        "url": "https://rladron-rodia.github.io/landing_contacto/",
+        "email": "contacto@monoulabs.ai"
+      },
+      "distribution": [
+        { "@type": "DataDownload", "encodingFormat": "JSON/JSONL", "contentUrl": "https://rladron-rodia.github.io/landing_contacto/" },
+        { "@type": "DataDownload", "encodingFormat": "API REST", "contentUrl": "https://rladron-rodia.github.io/landing_contacto/" }
+      ],
+      "measurementTechnique": "Automated gameplay recording, annotation and segmentation",
+      "variableMeasured": "Player actions, game states, rewards, visual frames",
+      "temporalCoverage": "2024/..",
+      "spatialCoverage": "Global"
+    }
+    </script>
+
+    <!-- ═══ CSS / fonts / scripts externos ═══ -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
     <script>
@@ -392,7 +474,7 @@
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div data-game-slug="aventure" class="glass-card rounded-xl p-6 border border-white/5 hover:border-brand-500/30 transition-all group cursor-pointer">
                   <div class="aspect-video bg-gradient-to-br from-brand-500/20 to-dark-800 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                    <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png" alt="Aventura" class="w-full h-full object-cover"></div>
+                    <img loading="lazy" decoding="async" width="320" height="180" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png" alt="Dataset gameplay de acción — combate en tiempo real, 250K sesiones 1080p" class="w-full h-full object-cover"></div>
                   <h4 data-game-field="title" class="text-base font-bold text-white mb-2">Aventure</h4>
                   <p data-game-field="description" data-es="Combate en tiempo real, inventario, progresión" data-en="Real-time combat, inventory, progression" class="text-xs text-gray-400 mb-3">Combate en tiempo real,
                     inventario, progresión</p>
@@ -402,7 +484,7 @@
                 </div>
                 <div data-game-slug="simulate" class="glass-card rounded-xl p-6 border border-white/5 hover:border-brand-500/30 transition-all group cursor-pointer">
                   <div class="aspect-video bg-gradient-to-br from-red-500/20 to-dark-800 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                    <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png" alt="Simulación" class="w-full h-full object-cover"></div>
+                    <img loading="lazy" decoding="async" width="320" height="180" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png" alt="Dataset gameplay de simulación — aventura épica, 180K sesiones con metadata" class="w-full h-full object-cover"></div>
                   <h4 data-game-field="title" class="text-base font-bold text-white mb-2">Simulate</h4>
                   <p data-game-field="description" data-es="Aventura épica, sistema de misiones" data-en="Epic adventure, quest system" class="text-xs text-gray-400 mb-3">Aventura épica, sistema
                     de misiones</p>
@@ -412,7 +494,7 @@
                 </div>
                 <div data-game-slug="puzzle" class="glass-card rounded-xl p-6 border border-white/5 hover:border-brand-500/30 transition-all group cursor-pointer">
                   <div class="aspect-video bg-gradient-to-br from-yellow-500/20 to-dark-800 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                    <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png" alt="Puzzle" class="w-full h-full object-cover"></div>
+                    <img loading="lazy" decoding="async" width="320" height="180" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png" alt="Dataset gameplay puzzle — exploración de mazmorras, 320K sesiones 1080p" class="w-full h-full object-cover"></div>
                   <h4 data-game-field="title" class="text-base font-bold text-white mb-2">Puzzle</h4>
                   <p data-game-field="description" data-es="Exploración de mazmorras, loot" data-en="Dungeon exploration, loot" class="text-xs text-gray-400 mb-3">Exploración de mazmorras,
                     loot</p>
@@ -428,7 +510,7 @@
                   <div class="aspect-video bg-gradient-to-br from-accent-cyan/20 to-dark-800 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
                     <i class="fa-solid fa-chess text-4xl text-accent-cyan group-hover:scale-110 transition-transform"></i>
                   </div>
-                  <h4 data-game-field="title" class="text-base font-bold text-white mb-2">Estratégia
+                  <h4 data-game-field="title" class="text-base font-bold text-white mb-2">Estrategia
                   </h4>
                   <p data-game-field="description" data-es="Decisiones tácticas, gestión de recursos" data-en="Tactical decisions, resource management" class="text-xs text-gray-400 mb-3">Decisiones tácticas,
                     gestión de recursos</p>
@@ -529,7 +611,7 @@
           <div id="ir9pjh" class="flex gap-4">
             <div data-game-slug="aventure" class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
               <div class="aspect-video bg-gradient-to-br from-brand-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png" alt="Aventura" class="w-full h-full object-cover"></div>
+                <img loading="lazy" decoding="async" width="320" height="180" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png" alt="Dataset gameplay de acción — combate en tiempo real, 250K sesiones 1080p" class="w-full h-full object-cover"></div>
               <h4 data-game-field="title" class="text-sm font-bold text-white mb-1">Aventure</h4>
               <p data-game-field="description" data-es="Combate en tiempo real, inventario, progresión" data-en="Real-time combat, inventory, progression" class="text-xs text-gray-400 mb-2">Combate en tiempo real,
                 inventario, progresión</p>
@@ -539,7 +621,7 @@
             </div>
             <div data-game-slug="simulate" class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
               <div class="aspect-video bg-gradient-to-br from-red-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png" alt="Simulación" class="w-full h-full object-cover"></div>
+                <img loading="lazy" decoding="async" width="320" height="180" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png" alt="Dataset gameplay de simulación — aventura épica, 180K sesiones con metadata" class="w-full h-full object-cover"></div>
               <h4 data-game-field="title" class="text-sm font-bold text-white mb-1">Simulate</h4>
               <p data-game-field="description" data-es="Aventura épica, sistema de misiones" data-en="Epic adventure, quest system" class="text-xs text-gray-400 mb-2">Aventura épica, sistema de
                 misiones</p>
@@ -549,7 +631,7 @@
             </div>
             <div data-game-slug="puzzle" class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
               <div class="aspect-video bg-gradient-to-br from-yellow-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png" alt="Puzzle" class="w-full h-full object-cover"></div>
+                <img loading="lazy" decoding="async" width="320" height="180" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png" alt="Dataset gameplay puzzle — exploración de mazmorras, 320K sesiones 1080p" class="w-full h-full object-cover"></div>
               <h4 data-game-field="title" class="text-sm font-bold text-white mb-1">Puzzle</h4>
               <p data-game-field="description" data-es="Exploración de mazmorras, loot" data-en="Dungeon exploration, loot" class="text-xs text-gray-400 mb-2">Exploración de mazmorras,
                 loot</p>
@@ -561,7 +643,7 @@
               <div class="aspect-video bg-gradient-to-br from-accent-cyan/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
                 <i class="fa-solid fa-chess text-3xl text-accent-cyan"></i>
               </div>
-              <h4 data-game-field="title" class="text-sm font-bold text-white mb-1">Estratégia</h4>
+              <h4 data-game-field="title" class="text-sm font-bold text-white mb-1">Estrategia</h4>
               <p data-game-field="description" data-es="Decisiones tácticas, gestión de recursos" data-en="Tactical decisions, resource management" class="text-xs text-gray-400 mb-2">Decisiones tácticas, gestión
                 de recursos</p>
               <div class="flex items-center gap-2 text-xs"><span data-game-field="tag" data-tag-index="0" data-es="180K sesiones" data-en="180K sessions" class="px-2 py-1 bg-dark-800 rounded text-gray-400">180K
@@ -650,25 +732,25 @@
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
           <div data-game-slug="minecraft" class="glass-card rounded-xl p-4 border border-white/5 hover:border-accent-cyan/30 transition-all group text-center">
             <div class="aspect-square bg-gradient-to-br from-purple-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-              <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/minecraft.png" alt="Minecraft" class="w-full h-full object-cover"></div>
+              <img loading="lazy" decoding="async" width="200" height="200" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/minecraft.png" alt="Dataset Minecraft — open world, 2.2M videos indexados para visión computacional" class="w-full h-full object-cover"></div>
             <h4 data-game-field="title" class="text-sm font-bold text-white">Minecraft</h4>
             <p data-game-field="description" class="text-xs text-gray-500 mt-1">Mundo Abierto</p>
           </div>
           <div data-game-slug="clash-royale" class="glass-card rounded-xl p-4 border border-white/5 hover:border-accent-cyan/30 transition-all group text-center">
             <div class="aspect-square bg-gradient-to-br from-orange-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-              <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/clashroyale.png" alt="Clash Royale" class="w-full h-full object-cover"></div>
+              <img loading="lazy" decoding="async" width="200" height="200" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/clashroyale.png" alt="Dataset Clash Royale — gameplay strategy con telemetría de inputs y recompensas" class="w-full h-full object-cover"></div>
             <h4 data-game-field="title" class="text-sm font-bold text-white">Clash Royale</h4>
             <p data-game-field="description" class="text-xs text-gray-500 mt-1">Strategy</p>
           </div>
           <div data-game-slug="brawl-stars" class="glass-card rounded-xl p-4 border border-white/5 hover:border-accent-cyan/30 transition-all group text-center">
             <div class="aspect-square bg-gradient-to-br from-yellow-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-              <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/brawlstar.png" alt="Brawl Stars" class="w-full h-full object-cover"></div>
+              <img loading="lazy" decoding="async" width="200" height="200" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/brawlstar.png" alt="Dataset Brawl Stars — gameplay MOBA con 250K+ sesiones para behavior cloning" class="w-full h-full object-cover"></div>
             <h4 data-game-field="title" class="text-sm font-bold text-white">Brawl Stars</h4>
             <p data-game-field="description" class="text-xs text-gray-500 mt-1">MOBA</p>
           </div>
           <div data-game-slug="roblox" class="glass-card rounded-xl p-4 border border-white/5 hover:border-accent-cyan/30 transition-all group text-center">
             <div class="aspect-square bg-gradient-to-br from-red-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-              <img data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/roblox.png" alt="Roblox" class="w-full h-full object-cover"></div>
+              <img loading="lazy" decoding="async" width="200" height="200" data-game-field="image" src="https://muestra-imagen.s3.us-east-1.amazonaws.com/roblox.png" alt="Dataset Roblox — open world con metadata de eventos para entrenamiento de IA" class="w-full h-full object-cover"></div>
             <h4 data-game-field="title" class="text-sm font-bold text-white">Roblox</h4>
             <p data-game-field="description" class="text-xs text-gray-500 mt-1">Mundo Abierto</p>
           </div>
@@ -842,7 +924,7 @@
         <div class="flex items-center gap-6 text-sm text-gray-500"><a data-link-key="privacy_terms" href="#" data-es="Términos de Privacidad" data-en="Privacy Terms" class="hover:text-white transition-colors">Términos de
             Privacidad</a><a data-link-key="data_licenses" href="#" data-es="Licencias de Datos" data-en="Data Licenses" class="hover:text-white transition-colors">Licencias de Datos</a><a href="mailto:rodrigo.ladron@monou.gg" data-es="Contacto" data-en="Contact" class="hover:text-white transition-colors">Contacto</a></div>
         <div class="text-xs text-gray-600">
-          © 2024 Monou.gg. AI Training Infrastructure.
+          © 2026 Monou Labs. AI Training Infrastructure.
         </div>
       </div>
     </footer>
