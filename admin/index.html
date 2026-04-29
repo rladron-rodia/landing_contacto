@@ -105,6 +105,12 @@
           <span class="nav-label flex-1 truncate">Bloques Info</span>
           <i class="fa-solid fa-pen-to-square nav-edit-btn text-gray-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="Renombrar pestaña"></i>
         </button>
+        <button data-view="analytics"
+                class="nav-btn group w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
+          <i class="fa-solid fa-chart-line w-4 flex-shrink-0"></i>
+          <span class="nav-label flex-1 truncate">Analytics &amp; GTM</span>
+          <i class="fa-solid fa-pen-to-square nav-edit-btn text-gray-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="Renombrar pestaña"></i>
+        </button>
       </nav>
       <div class="p-3 border-t border-white/10">
         <button id="logout-btn"
@@ -474,6 +480,124 @@
               </thead>
               <tbody id="info-tbody" class="divide-y divide-white/5"></tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Analytics & GTM view (v2.2.0) ─── -->
+      <section id="analytics-view" class="hidden">
+        <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
+          <div class="px-6 py-4 flex items-center gap-4">
+            <i class="fa-solid fa-chart-line text-brand-400"></i>
+            <h1 class="text-lg font-semibold">Analytics &amp; GTM</h1>
+            <div class="ml-auto flex items-center gap-3">
+              <button id="analytics-refresh" title="Refrescar" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+            </div>
+          </div>
+          <div class="px-6 pb-4 text-xs text-gray-500">
+            Configura Google Analytics 4 y Google Tag Manager. Agrega o edita los CTAs taggeables que disparan eventos custom al dataLayer / GA. Los cambios se aplican al recargar la landing (cache de 5 min en cliente).
+          </div>
+        </header>
+
+        <div class="p-6 space-y-6">
+          <!-- ── Sección 1: Configuración GA4 + GTM ── -->
+          <div class="bg-dark-800 border border-white/10 rounded-2xl p-6">
+            <h2 class="text-base font-semibold flex items-center gap-2 mb-1">
+              <i class="fa-solid fa-gear text-brand-400 text-sm"></i>
+              Configuración de tracking
+            </h2>
+            <p class="text-xs text-gray-500 mb-5">Activa cada herramienta de forma independiente. Puedes usar solo GA4, solo GTM, o ambos.</p>
+
+            <form id="analytics-config-form" class="space-y-5">
+              <!-- GA4 -->
+              <div class="bg-dark-900 border border-white/5 rounded-xl p-4">
+                <div class="flex items-start gap-3 mb-3">
+                  <i class="fa-solid fa-chart-line text-brand-400 mt-1"></i>
+                  <div class="flex-1">
+                    <h3 class="text-sm font-semibold">Google Analytics 4</h3>
+                    <p class="text-xs text-gray-500">Carga gtag.js directamente. Útil si NO usas GTM.</p>
+                  </div>
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input id="ga4-enabled" type="checkbox" class="sr-only peer">
+                    <span class="relative w-11 h-6 bg-dark-700 peer-checked:bg-brand-500 rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform peer-checked:after:translate-x-5"></span>
+                  </label>
+                </div>
+                <label class="block text-xs text-gray-400 mb-1">Measurement ID</label>
+                <input id="ga4-measurement-id" type="text" placeholder="G-XXXXXXXXXX"
+                       class="w-full bg-dark-700 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-brand-500">
+                <p class="text-xs text-gray-600 mt-1">Empieza con <code class="text-brand-400">G-</code>. Ej: <code class="text-brand-400">G-ABC1234DEF</code></p>
+              </div>
+
+              <!-- GTM -->
+              <div class="bg-dark-900 border border-white/5 rounded-xl p-4">
+                <div class="flex items-start gap-3 mb-3">
+                  <i class="fa-brands fa-google text-accent-cyan mt-1"></i>
+                  <div class="flex-1">
+                    <h3 class="text-sm font-semibold">Google Tag Manager</h3>
+                    <p class="text-xs text-gray-500">Carga el container de GTM. Útil para configurar GA4 + otros tags desde la UI de GTM.</p>
+                  </div>
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input id="gtm-enabled" type="checkbox" class="sr-only peer">
+                    <span class="relative w-11 h-6 bg-dark-700 peer-checked:bg-accent-cyan rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform peer-checked:after:translate-x-5"></span>
+                  </label>
+                </div>
+                <label class="block text-xs text-gray-400 mb-1">Container ID</label>
+                <input id="gtm-container-id" type="text" placeholder="GTM-XXXXXXX"
+                       class="w-full bg-dark-700 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent-cyan">
+                <p class="text-xs text-gray-600 mt-1">Empieza con <code class="text-accent-cyan">GTM-</code>. Ej: <code class="text-accent-cyan">GTM-ABC1234</code></p>
+              </div>
+
+              <div class="flex items-center justify-between pt-2">
+                <span id="analytics-config-status" class="text-xs text-gray-500"></span>
+                <button type="submit" id="analytics-config-save"
+                        class="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                  <i class="fa-solid fa-check"></i> Guardar configuración
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- ── Sección 2: CTAs taggeables ── -->
+          <div class="bg-dark-800 border border-white/10 rounded-2xl">
+            <div class="p-6 border-b border-white/10 flex items-center gap-4">
+              <h2 class="text-base font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-tags text-accent-purple text-sm"></i>
+                CTAs taggeables
+                <span id="cta-tags-count" class="text-xs bg-dark-900 px-2 py-1 rounded-full text-gray-400"></span>
+              </h2>
+              <p class="text-xs text-gray-500 flex-1">Cada CTA dispara un evento al dataLayer cuando recibe click/submit. GA y GTM consumen estos eventos.</p>
+              <button id="cta-tag-new" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> Nuevo CTA
+              </button>
+            </div>
+
+            <div class="p-6">
+              <div id="cta-tags-loading" class="text-center text-gray-400 py-12">
+                <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+              </div>
+              <div id="cta-tags-error" class="hidden text-center text-red-400 py-12">
+                <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+                <p id="cta-tags-error-msg" class="text-sm"></p>
+              </div>
+              <div id="cta-tags-table-wrap" class="hidden overflow-x-auto bg-dark-900 border border-white/10 rounded-xl">
+                <table class="w-full text-sm">
+                  <thead class="bg-dark-700/50 text-xs uppercase text-gray-400">
+                    <tr>
+                      <th class="text-left px-4 py-3 w-16">Orden</th>
+                      <th class="text-left px-4 py-3 w-12">Activo</th>
+                      <th class="text-left px-4 py-3">CTA Key</th>
+                      <th class="text-left px-4 py-3">Selector</th>
+                      <th class="text-left px-4 py-3">Evento</th>
+                      <th class="text-left px-4 py-3">Categoría</th>
+                      <th class="text-right px-4 py-3 w-24">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cta-tags-tbody" class="divide-y divide-white/5"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -880,6 +1004,84 @@
           </div>
         </div>
         <p id="info-form-error" class="hidden text-red-400 text-xs"></p>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
+            Guardar
+          </button>
+          <button type="button" class="modal-close px-4 py-2.5 border border-white/10 rounded-lg hover:bg-white/5">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── Modal: editar/crear CTA tag (v2.2.0) ───── -->
+  <div id="cta-tag-modal" class="hidden fixed inset-0 z-20 bg-black/70 flex items-center justify-center p-6">
+    <div class="bg-dark-800 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-white/10 flex items-center gap-3">
+        <i class="fa-solid fa-tags text-accent-purple"></i>
+        <h2 id="cta-tag-modal-title" class="text-lg font-semibold">Editar CTA tag</h2>
+        <button class="modal-close ml-auto text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <form id="cta-tag-form" class="p-6 space-y-4 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">CTA Key <span class="text-red-400">*</span></label>
+            <input id="cta-key" name="cta_key" required pattern="[a-z0-9_\-]+" placeholder="hero_contact_primary"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 font-mono text-xs">
+            <p class="text-gray-500 text-xs mt-1">Identificador único, snake_case. No se puede cambiar después.</p>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Orden</label>
+            <input id="cta-order" name="display_order" type="number" min="0" value="0"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Selector CSS <span class="text-red-400">*</span></label>
+          <input id="cta-selector" name="selector" required placeholder='a[href="#contacto"]'
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 font-mono text-xs">
+          <p class="text-gray-500 text-xs mt-1">querySelectorAll(...). Ejemplos: <code>[data-link-key="view_examples"]</code>, <code>section#hero a[href="#contacto"]</code>, <code>form#ixmppy</code> (si el selector matchea un &lt;form&gt;, el evento es <code>submit</code> en lugar de <code>click</code>).</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Event name</label>
+            <input id="cta-event-name" name="event_name" placeholder="cta_click" value="cta_click"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 font-mono text-xs">
+            <p class="text-gray-500 text-xs mt-1">Ej: <code>cta_click</code>, <code>nav_click</code>, <code>form_submit</code>, <code>footer_click</code>.</p>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Event category</label>
+            <select id="cta-event-category" name="event_category"
+                    class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+              <option value="">— Sin categoría —</option>
+              <option value="engagement">engagement</option>
+              <option value="conversion">conversion</option>
+              <option value="navigation">navigation</option>
+              <option value="outbound">outbound</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Event label</label>
+          <input id="cta-event-label" name="event_label" placeholder="hero_contact"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 font-mono text-xs">
+          <p class="text-gray-500 text-xs mt-1">Etiqueta human-readable que aparece en GA reports.</p>
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Descripción</label>
+          <textarea id="cta-description" name="description" rows="2" placeholder="CTA primaria del hero — botón blanco 'Contáctanos'"
+                    class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 resize-none"></textarea>
+        </div>
+        <div>
+          <label class="inline-flex items-center gap-2 cursor-pointer">
+            <input id="cta-enabled" type="checkbox" class="sr-only peer" checked>
+            <span class="relative w-11 h-6 bg-dark-700 peer-checked:bg-brand-500 rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform peer-checked:after:translate-x-5"></span>
+            <span class="text-sm text-gray-300">CTA activo (genera eventos)</span>
+          </label>
+        </div>
+        <p id="cta-tag-form-error" class="hidden text-red-400 text-xs"></p>
         <div class="flex gap-3 pt-2">
           <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
             Guardar

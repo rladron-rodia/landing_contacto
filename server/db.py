@@ -100,6 +100,31 @@ CREATE TABLE IF NOT EXISTS info_columns (
     display_order  INT NOT NULL DEFAULT 0,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- v2.2.0: configuración de Google Analytics y Tag Manager
+-- Singleton: una sola fila con id=1
+CREATE TABLE IF NOT EXISTS analytics_config (
+    id                    INT PRIMARY KEY DEFAULT 1,
+    ga4_measurement_id    TEXT,                  -- 'G-XXXXXXXXXX'
+    ga4_enabled           BOOLEAN NOT NULL DEFAULT FALSE,
+    gtm_container_id      TEXT,                  -- 'GTM-XXXXXXX'
+    gtm_enabled           BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT analytics_config_singleton CHECK (id = 1)
+);
+
+-- v2.2.0: catálogo de CTAs taggeables (eventos custom para GA/GTM)
+CREATE TABLE IF NOT EXISTS cta_tags (
+    cta_key         TEXT PRIMARY KEY,             -- identificador interno: 'hero_contact', 'form_submit'
+    selector        TEXT NOT NULL,                -- selector CSS: 'a[href="#contacto"]', '#ixmppy', etc.
+    event_name      TEXT NOT NULL DEFAULT 'cta_click',  -- nombre del evento en GA/GTM
+    event_label     TEXT,                         -- ej: 'hero_primary_contact'
+    event_category  TEXT,                         -- ej: 'engagement', 'conversion'
+    description     TEXT,                         -- descripción humana para el admin
+    enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+    display_order   INT NOT NULL DEFAULT 0,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
 # Migraciones idempotentes que se ejecutan al boot. ALTER TABLE IF NOT EXISTS
@@ -297,6 +322,78 @@ INFO_COLUMNS_SEED = [
 ]
 
 
+# v2.2.0 — Seed inicial de CTAs identificados en index.html.
+# El admin puede activar/desactivar, modificar event_name/label/category,
+# o agregar CTAs nuevos. ON CONFLICT (cta_key) DO NOTHING protege ediciones.
+# Tuple: (cta_key, selector, event_name, event_label, event_category, description, enabled, display_order)
+CTA_TAGS_SEED = [
+    # Hero — primaria
+    ("hero_contact_primary",
+     'section#hero a[href="#contacto"]:not([data-link-key])',
+     "cta_click", "hero_contact", "engagement",
+     "CTA primaria del hero — botón blanco 'Contáctanos'", True, 10),
+    # Hero — secundaria (Ver ejemplos)
+    ("hero_view_examples",
+     '[data-link-key="view_examples"]',
+     "cta_click", "hero_examples", "engagement",
+     "CTA secundaria del hero — botón ghost 'Ver ejemplos'", True, 20),
+    # Header / nav — Contáctanos
+    ("header_contact",
+     'header a[href="#contacto"]',
+     "cta_click", "header_contact", "engagement",
+     "CTA del header — botón 'Contáctanos' del menú top", True, 30),
+    # Header — links de navegación
+    ("nav_metricas",
+     'nav a[href="#metricas"]',
+     "nav_click", "nav_metricas", "navigation",
+     "Link de navegación a sección 'Métricas del Dataset'", True, 40),
+    ("nav_dataset_intelligence",
+     'nav a[href="#dataset-intelligence"]',
+     "nav_click", "nav_dataset_intelligence", "navigation",
+     "Link de navegación a 'Dataset Intelligence'", True, 41),
+    ("nav_juegos_monou",
+     'nav a[href="#juegos-monou"]',
+     "nav_click", "nav_juegos_f2p", "navigation",
+     "Link de navegación a sección 'Juegos F2P'", True, 42),
+    ("nav_juegos_terceros",
+     'nav a[href="#juegos-terceros"]',
+     "nav_click", "nav_juegos_publishers", "navigation",
+     "Link de navegación a sección 'Juegos Publishers'", True, 43),
+    ("nav_formato_entrega",
+     'nav a[href="#formato-entrega"]',
+     "nav_click", "nav_formato_entrega", "navigation",
+     "Link de navegación a sección 'Formato de Entrega'", True, 44),
+    # Form submit — conversión principal
+    ("form_submit_contact",
+     'form#ixmppy',
+     "form_submit", "contact_form", "conversion",
+     "Submit del formulario de contacto — conversión principal del landing", True, 50),
+    # Catálogo F2P
+    ("view_full_catalog",
+     '[data-link-key="view_full_catalog"]',
+     "cta_click", "view_full_catalog", "engagement",
+     "CTA card '+200 Juegos' al final del carrusel F2P", True, 60),
+    # Footer
+    ("footer_privacy",
+     '[data-link-key="privacy_terms"]',
+     "footer_click", "privacy_terms", "navigation",
+     "Link del footer a 'Términos de Privacidad'", True, 70),
+    ("footer_data_licenses",
+     '[data-link-key="data_licenses"]',
+     "footer_click", "data_licenses", "navigation",
+     "Link del footer a 'Licencias de Datos'", True, 71),
+    ("footer_contact_email",
+     'footer a[href^="mailto:"]',
+     "footer_click", "footer_contact_email", "engagement",
+     "Link del footer 'Contacto' (mailto:)", True, 72),
+    # Badge dataset (info, no clickeable pero útil para visibilidad)
+    ("hero_dataset_badge",
+     '[data-link-key="dataset_badge"]',
+     "cta_view", "dataset_badge", "engagement",
+     "Badge superior del hero — 'Dataset v2.0 ya disponible'", False, 80),
+]
+
+
 def is_enabled() -> bool:
     return bool(DATABASE_URL)
 
@@ -381,8 +478,24 @@ def init_schema() -> None:
                 INFO_COLUMNS_SEED,
             )
             info_inserted = cur.rowcount
-            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d, delivery: %d, info: %d",
-                     stats_inserted, games_inserted, links_inserted, delivery_inserted, info_inserted)
+            # v2.2.0 — Singleton de analytics_config (idempotente, solo crea fila si falta)
+            cur.execute(
+                """INSERT INTO analytics_config (id, ga4_enabled, gtm_enabled)
+                   VALUES (1, FALSE, FALSE)
+                   ON CONFLICT (id) DO NOTHING""",
+            )
+            analytics_initialized = cur.rowcount
+            # v2.2.0 — Seed cta_tags (idempotente)
+            cur.executemany(
+                """INSERT INTO cta_tags (cta_key, selector, event_name, event_label,
+                                          event_category, description, enabled, display_order)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (cta_key) DO NOTHING""",
+                CTA_TAGS_SEED,
+            )
+            cta_inserted = cur.rowcount
+            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d, delivery: %d, info: %d, analytics_init: %d, cta_tags: %d",
+                     stats_inserted, games_inserted, links_inserted, delivery_inserted, info_inserted, analytics_initialized, cta_inserted)
     except Exception:
         log.exception("[db] error inicializando schema")
 
@@ -926,4 +1039,173 @@ def delete_info_column(slug: str) -> bool:
         raise RuntimeError("DB no está habilitada")
     with conn() as c, c.cursor() as cur:
         cur.execute("DELETE FROM info_columns WHERE slug = %s", (slug,))
+        return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# v2.2.0 — Analytics config (singleton: GA4 + GTM credentials & toggles)
+# ---------------------------------------------------------------------------
+
+def get_analytics_config() -> dict:
+    """Retorna la única fila de analytics_config (id=1). Si DB deshabilitada,
+    retorna config 'todo apagado' como fallback seguro."""
+    if not is_enabled():
+        return {
+            "ga4_measurement_id": None, "ga4_enabled": False,
+            "gtm_container_id": None,   "gtm_enabled": False,
+            "updated_at": None,
+        }
+    with conn() as c, c.cursor() as cur:
+        cur.execute(
+            """SELECT ga4_measurement_id, ga4_enabled,
+                      gtm_container_id, gtm_enabled, updated_at
+               FROM analytics_config WHERE id = 1"""
+        )
+        row = cur.fetchone()
+        if not row:
+            # Fila singleton no existe aún → crearla con defaults y retornar
+            cur.execute(
+                """INSERT INTO analytics_config (id, ga4_enabled, gtm_enabled)
+                   VALUES (1, FALSE, FALSE) RETURNING ga4_measurement_id, ga4_enabled,
+                   gtm_container_id, gtm_enabled, updated_at"""
+            )
+            row = cur.fetchone()
+        if row.get("updated_at"):
+            row["updated_at"] = row["updated_at"].isoformat()
+        return row
+
+
+def upsert_analytics_config(payload: dict) -> dict:
+    """Actualiza la fila singleton de analytics_config."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    ga4_id      = (payload.get("ga4_measurement_id") or "").strip() or None
+    ga4_enabled = bool(payload.get("ga4_enabled"))
+    gtm_id      = (payload.get("gtm_container_id") or "").strip() or None
+    gtm_enabled = bool(payload.get("gtm_enabled"))
+
+    # Validación básica de formato de IDs (no rompe si está vacío, solo valida formato si hay valor)
+    if ga4_id and not ga4_id.upper().startswith("G-"):
+        raise ValueError("ga4_measurement_id debe empezar con 'G-' (ej: G-XXXXXXXXXX)")
+    if gtm_id and not gtm_id.upper().startswith("GTM-"):
+        raise ValueError("gtm_container_id debe empezar con 'GTM-' (ej: GTM-XXXXXXX)")
+    # Si están enabled, deben tener ID
+    if ga4_enabled and not ga4_id:
+        raise ValueError("ga4_enabled=true requiere ga4_measurement_id")
+    if gtm_enabled and not gtm_id:
+        raise ValueError("gtm_enabled=true requiere gtm_container_id")
+
+    with conn() as c, c.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO analytics_config (id, ga4_measurement_id, ga4_enabled,
+                                          gtm_container_id, gtm_enabled, updated_at)
+            VALUES (1, %s, %s, %s, %s, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                ga4_measurement_id = EXCLUDED.ga4_measurement_id,
+                ga4_enabled        = EXCLUDED.ga4_enabled,
+                gtm_container_id   = EXCLUDED.gtm_container_id,
+                gtm_enabled        = EXCLUDED.gtm_enabled,
+                updated_at         = NOW()
+            RETURNING ga4_measurement_id, ga4_enabled,
+                      gtm_container_id, gtm_enabled, updated_at
+            """,
+            (ga4_id, ga4_enabled, gtm_id, gtm_enabled),
+        )
+        row = cur.fetchone()
+        if row and row.get("updated_at"):
+            row["updated_at"] = row["updated_at"].isoformat()
+        return row
+
+
+# ---------------------------------------------------------------------------
+# v2.2.0 — CTA tags CRUD (eventos custom para GA/GTM)
+# ---------------------------------------------------------------------------
+
+def list_cta_tags(include_meta: bool = False, only_enabled: bool = False) -> list:
+    """Lista CTA tags ordenados. only_enabled=True para el endpoint público
+    (el loader del cliente solo necesita los activos)."""
+    if not is_enabled():
+        # Fallback al seed si DB deshabilitada
+        rows = [
+            {"cta_key": k, "selector": s, "event_name": en, "event_label": el,
+             "event_category": ec, "description": d, "enabled": e, "display_order": o}
+            for (k, s, en, el, ec, d, e, o) in CTA_TAGS_SEED
+        ]
+        if only_enabled:
+            rows = [r for r in rows if r["enabled"]]
+        return rows
+    cols = "cta_key, selector, event_name, event_label, event_category, description, enabled, display_order"
+    if include_meta:
+        cols += ", updated_at"
+    sql = f"SELECT {cols} FROM cta_tags"
+    if only_enabled:
+        sql += " WHERE enabled = TRUE"
+    sql += " ORDER BY display_order, cta_key"
+    with conn() as c, c.cursor() as cur:
+        cur.execute(sql)
+        rows = cur.fetchall()
+        if include_meta:
+            for r in rows:
+                if r.get("updated_at"):
+                    r["updated_at"] = r["updated_at"].isoformat()
+        return rows
+
+
+def upsert_cta_tag(payload: dict) -> dict:
+    """Crea o actualiza un CTA tag por cta_key."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    cta_key = (payload.get("cta_key") or "").strip()
+    if not cta_key:
+        raise ValueError("cta_key requerido")
+    selector = (payload.get("selector") or "").strip()
+    if not selector:
+        raise ValueError("selector requerido")
+
+    event_name     = (payload.get("event_name") or "cta_click").strip()
+    event_label    = (payload.get("event_label") or "").strip() or None
+    event_category = (payload.get("event_category") or "").strip() or None
+    description    = (payload.get("description") or "").strip() or None
+    enabled = bool(payload.get("enabled", True))
+    try:
+        display_order = int(payload.get("display_order") or 0)
+    except (TypeError, ValueError):
+        display_order = 0
+
+    with conn() as c, c.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO cta_tags (cta_key, selector, event_name, event_label,
+                                   event_category, description, enabled,
+                                   display_order, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (cta_key) DO UPDATE SET
+                selector       = EXCLUDED.selector,
+                event_name     = EXCLUDED.event_name,
+                event_label    = EXCLUDED.event_label,
+                event_category = EXCLUDED.event_category,
+                description    = EXCLUDED.description,
+                enabled        = EXCLUDED.enabled,
+                display_order  = EXCLUDED.display_order,
+                updated_at     = NOW()
+            RETURNING cta_key, selector, event_name, event_label,
+                      event_category, description, enabled,
+                      display_order, updated_at
+            """,
+            (cta_key, selector, event_name, event_label, event_category,
+             description, enabled, display_order),
+        )
+        row = cur.fetchone()
+        if row and row.get("updated_at"):
+            row["updated_at"] = row["updated_at"].isoformat()
+        return row
+
+
+def delete_cta_tag(cta_key: str) -> bool:
+    """Borra un CTA tag por cta_key."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    with conn() as c, c.cursor() as cur:
+        cur.execute("DELETE FROM cta_tags WHERE cta_key = %s", (cta_key,))
         return cur.rowcount > 0

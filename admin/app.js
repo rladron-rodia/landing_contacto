@@ -202,6 +202,7 @@
     $("#links-view").classList.toggle("hidden", name !== "links");
     $("#delivery-view").classList.toggle("hidden", name !== "delivery");
     $("#info-view").classList.toggle("hidden", name !== "info");
+    $("#analytics-view").classList.toggle("hidden", name !== "analytics");
     if (name === "contacts")   loadContacts();
     if (name === "stats")      loadStats();
     if (name === "games")      loadGames();
@@ -209,6 +210,7 @@
     if (name === "links")      loadLinks();
     if (name === "delivery")   loadDelivery();
     if (name === "info")       loadInfoColumns();
+    if (name === "analytics")  loadAnalytics();
   }
 
   // ============================================================
@@ -1248,6 +1250,174 @@
     if (e.key !== "Escape") return;
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     closeAllModals();
+  });
+
+  // ============================================================
+  //   ANALYTICS & GTM (v2.2.0)
+  // ============================================================
+  let allCtaTags = [];
+
+  async function loadAnalyticsConfig() {
+    const statusEl = $("#analytics-config-status");
+    statusEl.textContent = "Cargando…";
+    try {
+      const data = await api("GET", "/api/admin/analytics-config");
+      const cfg = (data && data.config) || {};
+      $("#ga4-measurement-id").value = cfg.ga4_measurement_id || "";
+      $("#ga4-enabled").checked      = !!cfg.ga4_enabled;
+      $("#gtm-container-id").value   = cfg.gtm_container_id || "";
+      $("#gtm-enabled").checked      = !!cfg.gtm_enabled;
+      statusEl.textContent = cfg.updated_at
+        ? `Última actualización: ${fmtDate(cfg.updated_at)}`
+        : "";
+    } catch (e) {
+      statusEl.textContent = "Error: " + (e.message || "no se pudo cargar");
+      statusEl.classList.add("text-red-400");
+    }
+  }
+
+  async function saveAnalyticsConfig(e) {
+    e.preventDefault();
+    const btn = $("#analytics-config-save");
+    const statusEl = $("#analytics-config-status");
+    statusEl.classList.remove("text-red-400", "text-brand-400");
+    btn.disabled = true; btn.classList.add("opacity-60");
+    try {
+      const payload = {
+        ga4_measurement_id: $("#ga4-measurement-id").value.trim(),
+        ga4_enabled:        $("#ga4-enabled").checked,
+        gtm_container_id:   $("#gtm-container-id").value.trim(),
+        gtm_enabled:        $("#gtm-enabled").checked,
+      };
+      await api("POST", "/api/admin/analytics-config", payload);
+      statusEl.textContent = "✓ Configuración guardada";
+      statusEl.classList.add("text-brand-400");
+      // Forzar refetch en el cliente (clear cache)
+      try { localStorage.removeItem("monou_analytics_config_v1"); } catch(_) {}
+    } catch (e) {
+      statusEl.textContent = "Error: " + (e.message || "no se pudo guardar");
+      statusEl.classList.add("text-red-400");
+    } finally {
+      btn.disabled = false; btn.classList.remove("opacity-60");
+    }
+  }
+
+  function renderCtaTagsRows() {
+    const tbody = $("#cta-tags-tbody");
+    if (!allCtaTags.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">Sin CTAs configurados — clic en "Nuevo CTA" para crear el primero.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = allCtaTags.map(t => `
+      <tr class="hover:bg-white/5">
+        <td class="px-4 py-3 text-gray-400">${t.display_order || 0}</td>
+        <td class="px-4 py-3">
+          ${t.enabled
+            ? '<span class="text-green-400" title="Activo"><i class="fa-solid fa-circle-check"></i></span>'
+            : '<span class="text-gray-600" title="Inactivo"><i class="fa-regular fa-circle"></i></span>'}
+        </td>
+        <td class="px-4 py-3"><code class="text-xs text-brand-400">${escapeHtml(t.cta_key)}</code></td>
+        <td class="px-4 py-3"><code class="text-xs text-gray-400" title="${escapeHtml(t.selector)}">${escapeHtml(t.selector.length > 40 ? t.selector.slice(0, 40) + "…" : t.selector)}</code></td>
+        <td class="px-4 py-3"><code class="text-xs text-accent-cyan">${escapeHtml(t.event_name || "cta_click")}</code></td>
+        <td class="px-4 py-3 text-gray-400 text-xs">${escapeHtml(t.event_category || "—")}</td>
+        <td class="px-4 py-3 text-right">
+          <button data-action="edit" data-key="${escapeHtml(t.cta_key)}" class="text-gray-400 hover:text-brand-400 px-2 py-1" title="Editar"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button data-action="delete" data-key="${escapeHtml(t.cta_key)}" class="text-gray-400 hover:text-red-400 px-2 py-1" title="Borrar"><i class="fa-solid fa-trash"></i></button>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  async function loadCtaTags() {
+    const loading = $("#cta-tags-loading");
+    const errBox  = $("#cta-tags-error");
+    const wrap    = $("#cta-tags-table-wrap");
+    loading.classList.remove("hidden");
+    errBox.classList.add("hidden");
+    wrap.classList.add("hidden");
+    try {
+      const data = await api("GET", "/api/admin/cta-tags");
+      allCtaTags = (data && data.tags) || [];
+      $("#cta-tags-count").textContent = `${allCtaTags.length} ${allCtaTags.length === 1 ? "CTA" : "CTAs"}`;
+      renderCtaTagsRows();
+      loading.classList.add("hidden");
+      wrap.classList.remove("hidden");
+    } catch (e) {
+      loading.classList.add("hidden");
+      errBox.classList.remove("hidden");
+      $("#cta-tags-error-msg").textContent = e.message || "Error al cargar CTAs";
+    }
+  }
+
+  function loadAnalytics() {
+    loadAnalyticsConfig();
+    loadCtaTags();
+  }
+
+  function openCtaTagModal(tag) {
+    const isEdit = !!tag;
+    $("#cta-tag-modal-title").textContent = isEdit ? "Editar CTA tag" : "Nuevo CTA tag";
+    $("#cta-tag-form-error").classList.add("hidden");
+    $("#cta-key").value             = tag ? tag.cta_key : "";
+    $("#cta-key").readOnly          = isEdit;
+    $("#cta-key").classList.toggle("opacity-60", isEdit);
+    $("#cta-selector").value        = tag ? tag.selector : "";
+    $("#cta-event-name").value      = tag ? (tag.event_name || "cta_click") : "cta_click";
+    $("#cta-event-label").value     = tag ? (tag.event_label || "") : "";
+    $("#cta-event-category").value  = tag ? (tag.event_category || "") : "";
+    $("#cta-description").value     = tag ? (tag.description || "") : "";
+    $("#cta-enabled").checked       = tag ? !!tag.enabled : true;
+    $("#cta-order").value            = tag ? (tag.display_order || 0) : 0;
+    $("#cta-tag-modal").classList.remove("hidden");
+  }
+
+  $("#cta-tag-new").addEventListener("click", () => openCtaTagModal(null));
+  $("#analytics-refresh").addEventListener("click", loadAnalytics);
+  $("#analytics-config-form").addEventListener("submit", saveAnalyticsConfig);
+
+  $("#cta-tag-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errEl = $("#cta-tag-form-error");
+    errEl.classList.add("hidden");
+    const payload = {
+      cta_key:         $("#cta-key").value.trim(),
+      selector:        $("#cta-selector").value.trim(),
+      event_name:      $("#cta-event-name").value.trim() || "cta_click",
+      event_label:     $("#cta-event-label").value.trim(),
+      event_category:  $("#cta-event-category").value,
+      description:     $("#cta-description").value.trim(),
+      enabled:         $("#cta-enabled").checked,
+      display_order:   parseInt($("#cta-order").value) || 0,
+    };
+    try {
+      await api("POST", "/api/admin/cta-tags", payload);
+      $("#cta-tag-modal").classList.add("hidden");
+      try { localStorage.removeItem("monou_cta_tags_v1"); } catch(_) {}
+      loadCtaTags();
+    } catch (e) {
+      errEl.textContent = e.message || "Error al guardar";
+      errEl.classList.remove("hidden");
+    }
+  });
+
+  $("#cta-tags-tbody").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    const key = btn.dataset.key;
+    const action = btn.dataset.action;
+    if (action === "edit") {
+      const tag = allCtaTags.find(t => t.cta_key === key);
+      if (tag) openCtaTagModal(tag);
+    } else if (action === "delete") {
+      if (!confirm(`¿Borrar CTA "${key}"?`)) return;
+      try {
+        await api("DELETE", `/api/admin/cta-tags/${encodeURIComponent(key)}`);
+        try { localStorage.removeItem("monou_cta_tags_v1"); } catch(_) {}
+        loadCtaTags();
+      } catch (e) {
+        alert("Error al borrar: " + (e.message || ""));
+      }
+    }
   });
 
   // ---------- Boot ----------
