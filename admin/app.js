@@ -35,6 +35,7 @@
   let allPublishers = [];
   let allLinks      = [];
   let allDelivery   = [];
+  let allInfoCols   = [];
   let currentView   = "contacts";
 
   // ---------- Token ----------
@@ -200,12 +201,14 @@
     $("#publishers-view").classList.toggle("hidden", name !== "publishers");
     $("#links-view").classList.toggle("hidden", name !== "links");
     $("#delivery-view").classList.toggle("hidden", name !== "delivery");
+    $("#info-view").classList.toggle("hidden", name !== "info");
     if (name === "contacts")   loadContacts();
     if (name === "stats")      loadStats();
     if (name === "games")      loadGames();
     if (name === "publishers") loadPublishers();
     if (name === "links")      loadLinks();
     if (name === "delivery")   loadDelivery();
+    if (name === "info")       loadInfoColumns();
   }
 
   // ============================================================
@@ -1054,6 +1057,156 @@
   ["#delivery-icon", "#delivery-icon-color", "#delivery-title-es", "#delivery-desc-es"].forEach(sel => {
     document.querySelector(sel).addEventListener("input", refreshDeliveryPreview);
     document.querySelector(sel).addEventListener("change", refreshDeliveryPreview);
+  });
+
+  // ============================================================
+  //   INFO COLUMNS (Visual Capture / Available Metadata / Current Volume)
+  // ============================================================
+
+  function renderInfoColumnsRows() {
+    $("#info-count").textContent = `${allInfoCols.length}`;
+    if (!allInfoCols.length) {
+      $("#info-tbody").innerHTML = `
+        <tr><td colspan="6" class="px-4 py-12 text-center text-gray-500">
+          No hay bloques. Pulsa <strong>Nuevo</strong> para crear el primero.
+        </td></tr>`;
+      $("#info-loading").classList.add("hidden");
+      $("#info-error").classList.add("hidden");
+      $("#info-table-wrap").classList.remove("hidden");
+      return;
+    }
+    $("#info-tbody").innerHTML = allInfoCols.map(c => {
+      const titleEs = c.title_es || "";
+      const titleEn = c.title_en || "";
+      const titleHtml = titleEs === titleEn
+        ? escapeHtml(titleEs)
+        : `<div class="font-medium">${escapeHtml(titleEs)}</div>
+           <div class="text-gray-500 text-xs italic">${escapeHtml(titleEn)}</div>`;
+      const iconHtml = c.icon
+        ? `<i class="${escapeHtml(c.icon)} text-xl ${escapeHtml(c.icon_color || "text-brand-400")}"></i>`
+        : `<span class="text-gray-600 text-xs">—</span>`;
+      const itemsHtml = (c.items_es || []).slice(0, 3).map(i => `
+        <div class="text-xs text-gray-400 truncate">• ${escapeHtml(i)}</div>`).join("");
+      const more = (c.items_es || []).length > 3 ? `<div class="text-xs text-gray-600">+${c.items_es.length - 3} más</div>` : "";
+      return `
+        <tr class="hover:bg-white/5">
+          <td class="px-4 py-3 text-gray-500">${escapeHtml(c.display_order ?? 0)}</td>
+          <td class="px-4 py-3">${iconHtml}</td>
+          <td class="px-4 py-3 font-mono text-brand-400 text-xs">${escapeHtml(c.slug)}</td>
+          <td class="px-4 py-3">${titleHtml}</td>
+          <td class="px-4 py-3 max-w-md">${itemsHtml}${more}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button class="info-edit text-gray-400 hover:text-brand-400 p-2" data-slug="${escapeHtml(c.slug)}" title="Editar">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button class="info-delete text-gray-400 hover:text-red-400 p-2" data-slug="${escapeHtml(c.slug)}" title="Borrar">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+    }).join("");
+    $("#info-loading").classList.add("hidden");
+    $("#info-error").classList.add("hidden");
+    $("#info-table-wrap").classList.remove("hidden");
+  }
+
+  async function loadInfoColumns() {
+    $("#info-loading").classList.remove("hidden");
+    $("#info-error").classList.add("hidden");
+    $("#info-table-wrap").classList.add("hidden");
+    try {
+      const json = await api("GET", "/api/admin/info-columns");
+      allInfoCols = json.columns || [];
+      renderInfoColumnsRows();
+    } catch (err) {
+      if (err.message === "Token inválido") return showLogin(err.message);
+      $("#info-error-msg").textContent = err.message;
+      $("#info-loading").classList.add("hidden");
+      $("#info-error").classList.remove("hidden");
+    }
+  }
+
+  function refreshInfoPreview() {
+    const icon  = $("#info-icon").value.trim() || "fa-solid fa-circle";
+    const color = $("#info-icon-color").value || "text-brand-400";
+    const titleEs = $("#info-title-es").value.trim() || "Título";
+    $("#info-icon-preview").className = `${icon} ${color}`;
+    $("#info-title-preview").textContent = titleEs;
+    const items = $("#info-items-es").value.split("\n").filter(s => s.trim());
+    $("#info-items-preview").innerHTML = items.map(i =>
+      `<div class="flex items-start gap-1"><i class="fa-solid fa-check text-brand-500 text-[10px] mt-0.5"></i><span>${escapeHtml(i)}</span></div>`
+    ).join("");
+  }
+
+  function openInfoModal(col) {
+    const isNew = !col;
+    $("#info-modal-title").textContent = isNew ? "Nuevo bloque" : "Editar bloque";
+    $("#info-form-error").classList.add("hidden");
+    $("#info-slug").value         = col ? col.slug : "";
+    $("#info-slug").disabled       = !isNew;
+    $("#info-title-es").value     = col ? (col.title_es || "") : "";
+    $("#info-title-en").value     = col ? (col.title_en || "") : "";
+    $("#info-icon").value          = col ? (col.icon || "fa-solid fa-circle") : "fa-solid fa-circle";
+    $("#info-icon-color").value    = col ? (col.icon_color || "text-brand-400") : "text-brand-400";
+    $("#info-items-es").value      = col ? (col.items_es || []).join("\n") : "";
+    $("#info-items-en").value      = col ? (col.items_en || []).join("\n") : "";
+    $("#info-order").value         = col ? (col.display_order ?? 0) : 0;
+    refreshInfoPreview();
+    openModal("#info-modal");
+    setTimeout(() => $("#info-title-es").focus(), 0);
+  }
+
+  async function submitInfoForm(e) {
+    e.preventDefault();
+    $("#info-form-error").classList.add("hidden");
+    const payload = {
+      slug:           $("#info-slug").value.trim(),
+      title_es:       $("#info-title-es").value.trim(),
+      title_en:       $("#info-title-en").value.trim(),
+      icon:           $("#info-icon").value.trim(),
+      icon_color:     $("#info-icon-color").value,
+      items_es:       $("#info-items-es").value,
+      items_en:       $("#info-items-en").value,
+      display_order:  parseInt($("#info-order").value, 10) || 0,
+    };
+    try {
+      await api("POST", "/api/admin/info-columns", payload);
+      closeAllModals();
+      try { localStorage.removeItem("monou_info_columns_v1"); } catch (e) {}
+      loadInfoColumns();
+    } catch (err) {
+      $("#info-form-error").textContent = err.message;
+      $("#info-form-error").classList.remove("hidden");
+    }
+  }
+
+  async function deleteInfoColumn(slug) {
+    if (!confirm(`¿Borrar el bloque "${slug}"?`)) return;
+    try {
+      await api("DELETE", `/api/admin/info-columns/${encodeURIComponent(slug)}`);
+      try { localStorage.removeItem("monou_info_columns_v1"); } catch (e) {}
+      loadInfoColumns();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
+  $("#info-refresh").addEventListener("click", loadInfoColumns);
+  $("#info-new").addEventListener("click", () => openInfoModal(null));
+  $("#info-tbody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".info-edit");
+    const delBtn  = e.target.closest(".info-delete");
+    if (editBtn) {
+      const c = allInfoCols.find(x => x.slug === editBtn.dataset.slug);
+      if (c) openInfoModal(c);
+    } else if (delBtn) {
+      deleteInfoColumn(delBtn.dataset.slug);
+    }
+  });
+  $("#info-form").addEventListener("submit", submitInfoForm);
+  ["#info-icon", "#info-icon-color", "#info-title-es", "#info-items-es"].forEach(sel => {
+    document.querySelector(sel).addEventListener("input", refreshInfoPreview);
+    document.querySelector(sel).addEventListener("change", refreshInfoPreview);
   });
 
   // Modales

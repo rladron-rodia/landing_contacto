@@ -99,6 +99,12 @@
           <span class="nav-label flex-1 truncate">Formatos &amp; Entrega</span>
           <i class="fa-solid fa-pen-to-square nav-edit-btn text-gray-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="Renombrar pestaña"></i>
         </button>
+        <button data-view="info"
+                class="nav-btn group w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
+          <i class="fa-solid fa-rectangle-list w-4 flex-shrink-0"></i>
+          <span class="nav-label flex-1 truncate">Bloques Info</span>
+          <i class="fa-solid fa-pen-to-square nav-edit-btn text-gray-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="Renombrar pestaña"></i>
+        </button>
       </nav>
       <div class="p-3 border-t border-white/10">
         <button id="logout-btn"
@@ -423,6 +429,55 @@
         </div>
       </section>
 
+      <!-- ─── Info columns view ─── -->
+      <section id="info-view" class="hidden">
+        <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
+          <div class="px-6 py-4 flex items-center gap-4">
+            <i class="fa-solid fa-rectangle-list text-brand-400"></i>
+            <h1 class="text-lg font-semibold">Bloques Info</h1>
+            <span id="info-count" class="text-xs bg-dark-900 px-2 py-1 rounded-full text-gray-400"></span>
+            <div class="ml-auto flex items-center gap-3">
+              <button id="info-refresh" title="Refrescar" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+              <button id="info-new" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> Nuevo
+              </button>
+            </div>
+          </div>
+          <div class="px-6 pb-4 text-xs text-gray-500">
+            Las 3 columnas de info dentro del card grande en la sección Publishers
+            (Visual Capture / Available Metadata / Current Volume). Edita el título,
+            icono y los bullets (uno por línea).
+          </div>
+        </header>
+
+        <div class="p-6">
+          <div id="info-loading" class="text-center text-gray-400 py-12">
+            <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+          </div>
+          <div id="info-error" class="hidden text-center text-red-400 py-12">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+            <p id="info-error-msg" class="text-sm"></p>
+          </div>
+          <div id="info-table-wrap" class="hidden overflow-x-auto bg-dark-800 border border-white/10 rounded-2xl">
+            <table class="w-full text-sm">
+              <thead class="bg-dark-700/50 text-xs uppercase text-gray-400">
+                <tr>
+                  <th class="text-left px-4 py-3 w-16">Orden</th>
+                  <th class="text-left px-4 py-3 w-16">Icono</th>
+                  <th class="text-left px-4 py-3">Slug</th>
+                  <th class="text-left px-4 py-3">Título</th>
+                  <th class="text-left px-4 py-3">Bullets ES</th>
+                  <th class="text-right px-4 py-3 w-24">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="info-tbody" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -736,6 +791,95 @@
           </div>
         </div>
         <p id="delivery-form-error" class="hidden text-red-400 text-xs"></p>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
+            Guardar
+          </button>
+          <button type="button" class="modal-close px-4 py-2.5 border border-white/10 rounded-lg hover:bg-white/5">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── Modal: editar/crear info column ───── -->
+  <div id="info-modal" class="hidden fixed inset-0 z-20 bg-black/70 flex items-center justify-center p-6">
+    <div class="bg-dark-800 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-white/10 flex items-center gap-3">
+        <i class="fa-solid fa-rectangle-list text-brand-400"></i>
+        <h2 id="info-modal-title" class="text-lg font-semibold">Editar bloque</h2>
+        <button class="modal-close ml-auto text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <form id="info-form" class="p-6 space-y-4 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Slug</label>
+            <input id="info-slug" name="slug" required pattern="[a-z0-9_\-]+" placeholder="visual_capture"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+            <p class="text-gray-500 text-xs mt-1">Coincide con <code>data-info-column</code> en el HTML.</p>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Orden</label>
+            <input id="info-order" name="display_order" type="number" min="0" value="0"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Título ES</label>
+            <input id="info-title-es" name="title_es" required placeholder="Captura Visual"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Título EN</label>
+            <input id="info-title-en" name="title_en" required placeholder="Visual Capture"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3 items-end">
+          <div class="col-span-2">
+            <label class="block text-gray-400 text-xs uppercase mb-1">Icono</label>
+            <input id="info-icon" name="icon" placeholder="fa-solid fa-video"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 font-mono text-xs">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Color</label>
+            <select id="info-icon-color" name="icon_color"
+                    class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+              <option value="text-brand-400">Verde</option>
+              <option value="text-accent-cyan">Cyan</option>
+              <option value="text-accent-purple">Morado</option>
+              <option value="text-gray-400">Gris</option>
+              <option value="text-yellow-400">Amarillo</option>
+              <option value="text-red-400">Rojo</option>
+              <option value="text-blue-400">Azul</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Vista previa</label>
+          <div class="bg-dark-900 border border-white/10 rounded-lg p-4 min-h-[60px]">
+            <h3 class="text-base font-bold text-white mb-2 flex items-center gap-2">
+              <i id="info-icon-preview" class="fa-solid fa-circle text-brand-400"></i>
+              <span id="info-title-preview">Título</span>
+            </h3>
+            <div id="info-items-preview" class="text-xs text-gray-400"></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Bullets ES <span class="text-gray-600 normal-case">(uno por línea)</span></label>
+            <textarea id="info-items-es" name="items_es" rows="5" placeholder="Resolución hasta 1080p @ 60fps&#10;Otra característica"
+                      class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 resize-none font-mono text-xs"></textarea>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Bullets EN <span class="text-gray-600 normal-case">(uno por línea, mismo orden que ES)</span></label>
+            <textarea id="info-items-en" name="items_en" rows="5" placeholder="Resolution up to 1080p @ 60fps&#10;Another feature"
+                      class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 resize-none font-mono text-xs"></textarea>
+          </div>
+        </div>
+        <p id="info-form-error" class="hidden text-red-400 text-xs"></p>
         <div class="flex gap-3 pt-2">
           <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
             Guardar

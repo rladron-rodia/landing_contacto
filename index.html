@@ -991,7 +991,7 @@ data-game-field="tag" data-tag-index="1"                   class="px-2 py-1 bg-d
         </div>
         <div class="glass-card rounded-2xl p-8 border border-white/5">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div>
+            <div data-info-column="visual_capture">
               <h3
                 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <i class="fa-solid fa-video text-accent-cyan"></i><span
@@ -1005,7 +1005,7 @@ data-game-field="tag" data-tag-index="1"                   class="px-2 py-1 bg-d
                     1080p @ 60fps</span></li>
               </ul>
             </div>
-            <div>
+            <div data-info-column="available_metadata">
               <h3
                 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <i class="fa-solid fa-tags text-accent-purple"></i><span
@@ -1029,7 +1029,7 @@ data-game-field="tag" data-tag-index="1"                   class="px-2 py-1 bg-d
                     partidas</span></li>
               </ul>
             </div>
-            <div>
+            <div data-info-column="current_volume">
               <h3
                 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <i class="fa-solid fa-chart-bar text-brand-400"></i><span
@@ -1037,21 +1037,15 @@ data-game-field="tag" data-tag-index="1"                   class="px-2 py-1 bg-d
                   Actual</span></h3>
               <ul class="space-y-3 text-sm text-gray-400">
                 <li class="flex items-start gap-2"><i
-                    class="fa-solid fa-check text-brand-500 mt-1 flex-shrink-0"></i><span><span
-                    data-stat-value="publishers_videos"
-                    class="text-white font-semibold">2.2M</span>
-                    <span data-stat-label="publishers_videos"
-                    data-es="videos indexados"
-                    data-en="indexed videos">videos indexados</span></span>
+                    class="fa-solid fa-check text-brand-500 mt-1 flex-shrink-0"></i><span
+                    data-es="2.2M videos indexados"
+                    data-en="2.2M indexed videos">2.2M videos indexados</span>
                 </li>
                 <li class="flex items-start gap-2"><i
-                    class="fa-solid fa-check text-brand-500 mt-1 flex-shrink-0"></i><span><span
-                    data-stat-value="publishers_hours"
-                    class="text-white font-semibold">3.8K</span>
-                    <span data-stat-label="publishers_hours"
-                    data-es="horas de captura total"
-                    data-en="hours of total capture">horas de captura total</span></span>
-                </li>
+                    class="fa-solid fa-check text-brand-500 mt-1 flex-shrink-0"></i><span
+                    data-es="3.8K horas de captura total"
+                    data-en="3.8K hours of total capture">3.8K horas de captura
+                    total</span></li>
                 <li class="flex items-start gap-2"><i
                     class="fa-solid fa-check text-brand-500 mt-1 flex-shrink-0"></i><span
                     data-es="Actualización semanal"
@@ -1415,6 +1409,7 @@ data-game-field="tag" data-tag-index="1"                   class="px-2 py-1 bg-d
     <script src="server/games-loader.js" defer></script>
     <script src="server/links-loader.js" defer></script>
     <script src="server/delivery-loader.js" defer></script>
+    <script src="server/info-columns-loader.js" defer></script>
   </body>
 
 </html>
