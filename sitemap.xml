@@ -5,6 +5,7 @@
   <!-- Landing principal — versión ES (default) -->
   <url>
     <loc>https://rladron-rodia.github.io/landing_contacto/</loc>
+    <lastmod>2026-04-28</lastmod>
     <xhtml:link rel="alternate" hreflang="es" href="https://rladron-rodia.github.io/landing_contacto/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://rladron-rodia.github.io/landing_contacto/?lang=en"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://rladron-rodia.github.io/landing_contacto/"/>
@@ -15,6 +16,7 @@
   <!-- Landing — versión EN (mismo recurso con query param para hreflang) -->
   <url>
     <loc>https://rladron-rodia.github.io/landing_contacto/?lang=en</loc>
+    <lastmod>2026-04-28</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://rladron-rodia.github.io/landing_contacto/?lang=en"/>
     <xhtml:link rel="alternate" hreflang="es" href="https://rladron-rodia.github.io/landing_contacto/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://rladron-rodia.github.io/landing_contacto/"/>
