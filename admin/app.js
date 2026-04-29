@@ -29,10 +29,11 @@
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
 
   // ---------- State ----------
-  let allContacts = [];
-  let allStats    = [];
-  let allGames    = [];
-  let currentView = "contacts";
+  let allContacts   = [];
+  let allStats      = [];
+  let allGames      = [];
+  let allPublishers = [];
+  let currentView   = "contacts";
 
   // ---------- Token ----------
   const getToken   = () => localStorage.getItem(TOKEN_KEY) || "";
@@ -102,9 +103,11 @@
     $("#contacts-view").classList.toggle("hidden", name !== "contacts");
     $("#stats-view").classList.toggle("hidden", name !== "stats");
     $("#games-view").classList.toggle("hidden", name !== "games");
-    if (name === "contacts") loadContacts();
-    if (name === "stats")    loadStats();
-    if (name === "games")    loadGames();
+    $("#publishers-view").classList.toggle("hidden", name !== "publishers");
+    if (name === "contacts")   loadContacts();
+    if (name === "stats")      loadStats();
+    if (name === "games")      loadGames();
+    if (name === "publishers") loadPublishers();
   }
 
   // ============================================================
@@ -430,7 +433,7 @@
     $("#games-error").classList.add("hidden");
     $("#games-table-wrap").classList.add("hidden");
     try {
-      const json = await api("GET", "/api/admin/games");
+      const json = await api("GET", "/api/admin/games?category=f2p");
       allGames = json.games || [];
       renderGamesRows();
     } catch (err) {
@@ -441,22 +444,25 @@
     }
   }
 
-  function openGameModal(game) {
+  function openGameModal(game, defaultCategory) {
     const isNew = !game;
-    $("#game-modal-title").textContent = isNew ? "Nuevo juego" : "Editar juego";
+    const cat = game ? (game.category || "f2p") : (defaultCategory || "f2p");
+    const titleSuffix = cat === "publishers" ? " (Publisher)" : "";
+    $("#game-modal-title").textContent = (isNew ? "Nuevo juego" : "Editar juego") + titleSuffix;
     $("#game-form-error").classList.add("hidden");
     $("#game-slug").value      = game ? game.slug : "";
     $("#game-slug").disabled    = !isNew;
-    // Si el juego solo tiene title (legacy), úsalo como default para ambos idiomas
     const fallback = game ? game.title : "";
     $("#game-title-es").value   = game ? (game.title_es || fallback) : "";
     $("#game-title-en").value   = game ? (game.title_en || fallback) : "";
     $("#game-image").value      = game ? (game.image_url || "") : "";
+    $("#game-link").value       = game ? (game.link_url  || "") : "";
     $("#game-desc-es").value    = game ? (game.description_es || "") : "";
     $("#game-desc-en").value    = game ? (game.description_en || "") : "";
     $("#game-tags-es").value    = game ? (game.tags_es || []).join(", ") : "";
     $("#game-tags-en").value    = game ? (game.tags_en || []).join(", ") : "";
     $("#game-order").value      = game ? (game.display_order ?? 0) : 0;
+    $("#game-category").value   = cat;
     refreshGameImagePreview();
     openModal("#game-modal");
     setTimeout(() => $("#game-title-es").focus(), 0);
@@ -479,23 +485,28 @@
     $("#game-form-error").classList.add("hidden");
     const titleEs = $("#game-title-es").value.trim();
     const titleEn = $("#game-title-en").value.trim();
+    const category = $("#game-category").value || "f2p";
     const payload = {
       slug:           $("#game-slug").value.trim(),
       title_es:       titleEs,
       title_en:       titleEn,
       title:          titleEs || titleEn,  // legacy fallback
       image_url:      $("#game-image").value.trim(),
+      link_url:       $("#game-link").value.trim(),
       description_es: $("#game-desc-es").value.trim(),
       description_en: $("#game-desc-en").value.trim(),
       tags_es:        $("#game-tags-es").value,
       tags_en:        $("#game-tags-en").value,
+      category:       category,
       display_order:  parseInt($("#game-order").value, 10) || 0,
     };
     try {
       await api("POST", "/api/admin/games", payload);
       closeAllModals();
       try { localStorage.removeItem("monou_games_v1"); } catch (e) {}
-      loadGames();
+      // Recargar la vista que corresponda
+      if (category === "publishers") loadPublishers();
+      else                            loadGames();
     } catch (err) {
       $("#game-form-error").textContent = err.message;
       $("#game-form-error").classList.remove("hidden");
@@ -513,9 +524,9 @@
     }
   }
 
-  // Listeners de games
+  // Listeners de games (F2P)
   $("#games-refresh").addEventListener("click", loadGames);
-  $("#games-new").addEventListener("click", () => openGameModal(null));
+  $("#games-new").addEventListener("click", () => openGameModal(null, "f2p"));
   $("#games-tbody").addEventListener("click", (e) => {
     const editBtn = e.target.closest(".game-edit");
     const delBtn  = e.target.closest(".game-delete");
@@ -528,6 +539,98 @@
   });
   $("#game-form").addEventListener("submit", submitGameForm);
   $("#game-image").addEventListener("input", refreshGameImagePreview);
+
+  // ============================================================
+  //   PUBLISHERS (juegos AAA)
+  // ============================================================
+
+  function renderPublishersRows() {
+    $("#publishers-count").textContent = `${allPublishers.length}`;
+    if (!allPublishers.length) {
+      $("#publishers-tbody").innerHTML = `
+        <tr><td colspan="7" class="px-4 py-12 text-center text-gray-500">
+          No hay juegos publishers. Pulsa <strong>Nuevo</strong> para crear el primero.
+        </td></tr>`;
+      $("#publishers-loading").classList.add("hidden");
+      $("#publishers-error").classList.add("hidden");
+      $("#publishers-table-wrap").classList.remove("hidden");
+      return;
+    }
+    $("#publishers-tbody").innerHTML = allPublishers.map(g => {
+      const titleEs = g.title_es || g.title || "";
+      const titleEn = g.title_en || g.title || "";
+      const titleHtml = titleEs === titleEn
+        ? escapeHtml(titleEs)
+        : `<div class="font-medium">${escapeHtml(titleEs)}</div>
+           <div class="text-gray-500 text-xs italic">${escapeHtml(titleEn)}</div>`;
+      const img = g.image_url
+        ? `<img src="${escapeHtml(g.image_url)}" alt="" class="w-12 h-12 object-cover rounded">`
+        : `<div class="w-12 h-12 bg-dark-900 rounded flex items-center justify-center"><i class="fa-solid fa-image text-gray-600 text-xs"></i></div>`;
+      const linkCell = g.link_url
+        ? `<a href="${escapeHtml(g.link_url)}" target="_blank" rel="noopener" class="text-brand-400 hover:underline text-xs">↗ link</a>`
+        : `<span class="text-gray-600 text-xs">—</span>`;
+      return `
+        <tr class="hover:bg-white/5">
+          <td class="px-4 py-3 text-gray-500">${escapeHtml(g.display_order ?? 0)}</td>
+          <td class="px-4 py-3">${img}</td>
+          <td class="px-4 py-3 font-mono text-brand-400 text-xs">${escapeHtml(g.slug)}</td>
+          <td class="px-4 py-3">${titleHtml}</td>
+          <td class="px-4 py-3 text-gray-300 max-w-xs truncate">${escapeHtml(g.description_es || "—")}</td>
+          <td class="px-4 py-3">${linkCell}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button class="publisher-edit text-gray-400 hover:text-brand-400 p-2" data-slug="${escapeHtml(g.slug)}" title="Editar">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button class="publisher-delete text-gray-400 hover:text-red-400 p-2" data-slug="${escapeHtml(g.slug)}" title="Borrar">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+    }).join("");
+    $("#publishers-loading").classList.add("hidden");
+    $("#publishers-error").classList.add("hidden");
+    $("#publishers-table-wrap").classList.remove("hidden");
+  }
+
+  async function loadPublishers() {
+    $("#publishers-loading").classList.remove("hidden");
+    $("#publishers-error").classList.add("hidden");
+    $("#publishers-table-wrap").classList.add("hidden");
+    try {
+      const json = await api("GET", "/api/admin/games?category=publishers");
+      allPublishers = json.games || [];
+      renderPublishersRows();
+    } catch (err) {
+      if (err.message === "Token inválido") return showLogin(err.message);
+      $("#publishers-error-msg").textContent = err.message;
+      $("#publishers-loading").classList.add("hidden");
+      $("#publishers-error").classList.remove("hidden");
+    }
+  }
+
+  async function deletePublisher(slug) {
+    if (!confirm(`¿Borrar el juego publisher "${slug}"?`)) return;
+    try {
+      await api("DELETE", `/api/admin/games/${encodeURIComponent(slug)}`);
+      try { localStorage.removeItem("monou_games_v1"); } catch (e) {}
+      loadPublishers();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
+  $("#publishers-refresh").addEventListener("click", loadPublishers);
+  $("#publishers-new").addEventListener("click", () => openGameModal(null, "publishers"));
+  $("#publishers-tbody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".publisher-edit");
+    const delBtn  = e.target.closest(".publisher-delete");
+    if (editBtn) {
+      const g = allPublishers.find(x => x.slug === editBtn.dataset.slug);
+      if (g) openGameModal(g);
+    } else if (delBtn) {
+      deletePublisher(delBtn.dataset.slug);
+    }
+  });
 
   // Modales
   $$(".modal-close").forEach(btn => btn.addEventListener("click", closeAllModals));

@@ -84,14 +84,12 @@
 
     // Image — algunas cards solo tienen un <i> icon, sin <img>. Si llega
     // una image_url y no hay <img> aún, lo creamos dentro del contenedor
-    // aspect-video (sustituyendo el icon por la foto). Si ya hay <img>,
-    // solo actualizamos su src.
+    // aspect-video o aspect-square (Publishers usa cuadrado).
     if (game.image_url) {
       let imgEl = card.querySelector('[data-game-field="image"]');
       if (!imgEl) {
-        const container = card.querySelector('.aspect-video');
+        const container = card.querySelector('.aspect-video, .aspect-square');
         if (container) {
-          // Limpia el contenido previo (icon de fontawesome, etc.)
           container.innerHTML = "";
           imgEl = document.createElement("img");
           imgEl.setAttribute("data-game-field", "image");
@@ -103,6 +101,18 @@
         imgEl.setAttribute("src", game.image_url);
         imgEl.setAttribute("alt", game.title_es || game.title_en || game.title || "");
       }
+    }
+
+    // Link — si la card tiene link_url, hacerla clickable. Abrimos en otra
+    // pestaña para no perder al usuario en la landing.
+    if (game.link_url) {
+      card.classList.add("cursor-pointer");
+      card.dataset.gameLinkUrl = game.link_url;
+      card.onclick = (e) => {
+        // No navegar si el click viene de un link interno o botón
+        if (e.target.closest("a, button")) return;
+        window.open(game.link_url, "_blank", "noopener,noreferrer");
+      };
     }
   }
 
