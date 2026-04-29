@@ -198,6 +198,12 @@ SITE_LINKS_SEED = [
      "",  # image_url se configura desde el admin
      "Ver Catálogo Completo", "View Full Catalog",
      1),
+    ("view_examples",
+     "Botón 'Ver ejemplos' / 'View examples' del hero. La URL puede ser un anchor interno (#ejemplos) o una URL externa (https://...).",
+     "#ejemplos",  # default — anchor interno (comportamiento actual)
+     "",            # sin imagen
+     "Ver ejemplos", "View examples",
+     2),
 ]
 
 # Datos iniciales de delivery_options (Data Formats + Delivery Methods).
