@@ -1,6 +1,25 @@
+# robots.txt — Monou Labs landing_contacto
+# Última actualización: 2026-04-28
+
 User-agent: *
 Allow: /
 Disallow: /admin/
 Disallow: /server/
+Disallow: /.git/
+Disallow: /*?*
+
+# Permitir crawlers de IA / dataset search
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Bloquear bots de scraping agresivos conocidos
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+User-agent: SemrushBot
+Crawl-delay: 10
 
 Sitemap: https://rladron-rodia.github.io/landing_contacto/sitemap.xml

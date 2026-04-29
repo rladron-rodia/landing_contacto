@@ -41,6 +41,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="dns-prefetch" href="https://landing-contacto-backend.onrender.com">
 
+    <!-- ═══ Theme & mobile hints ═══ -->
+    <meta name="theme-color" content="#0B0E14">
+    <meta name="color-scheme" content="dark">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="application-name" content="Monou Labs">
+    <meta name="apple-mobile-web-app-title" content="Monou Labs">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
     <!-- ═══ Favicon ═══ -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎮%3C/text%3E%3C/svg%3E">
 
@@ -80,6 +90,69 @@
       "variableMeasured": "Player actions, game states, rewards, visual frames",
       "temporalCoverage": "2024/..",
       "spatialCoverage": "Global"
+    }
+    </script>
+
+    <!-- ═══ Schema.org Organization (entidad — knowledge graph) ═══ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Monou Labs",
+      "alternateName": ["monoulabs.ai", "Monou.gg"],
+      "url": "https://rladron-rodia.github.io/landing_contacto/",
+      "logo": "https://rladron-rodia.github.io/landing_contacto/og-preview.png",
+      "description": "Gameplay datasets para entrenamiento de IA — World Models, Reinforcement Learning y Behavior Cloning",
+      "sameAs": [
+        "https://github.com/rladron-rodia/landing_contacto"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "email": "contacto@monoulabs.ai",
+        "contactType": "sales",
+        "availableLanguage": ["Spanish", "English"]
+      }
+    }
+    </script>
+
+    <!-- ═══ Schema.org Service (oferta B2B — rich results) ═══ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      "serviceType": "AI Training Dataset",
+      "name": "Gameplay Datasets para entrenamiento de IA",
+      "provider": {
+        "@type": "Organization",
+        "name": "Monou Labs",
+        "url": "https://rladron-rodia.github.io/landing_contacto/"
+      },
+      "areaServed": "Worldwide",
+      "audience": {
+        "@type": "BusinessAudience",
+        "audienceType": "ML Engineers, RL Researchers, AI Labs"
+      },
+      "description": "10K+ horas de gameplay curado y etiquetado para World Models, Reinforcement Learning y Behavior Cloning. Cobertura de 50+ juegos F2P y títulos AAA, entrega vía S3 o API REST.",
+      "offers": {
+        "@type": "Offer",
+        "url": "https://rladron-rodia.github.io/landing_contacto/#contacto",
+        "availability": "https://schema.org/InStock"
+      }
+    }
+    </script>
+
+    <!-- ═══ Schema.org WebSite (search action + sitelinks) ═══ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Monou Labs",
+      "url": "https://rladron-rodia.github.io/landing_contacto/",
+      "inLanguage": ["es", "en"],
+      "publisher": {
+        "@type": "Organization",
+        "name": "Monou Labs"
+      }
     }
     </script>
 
@@ -278,6 +351,86 @@
       {
         color: #9ca3af;
       }
+
+      /* ═══ A11y — Skip link (oculto hasta foco con teclado) ═══ */
+      .skip-link
+      {
+        position: absolute;
+        top: -100px;
+        left: 0;
+        background: #14b8a6;
+        color: #0B0E14;
+        padding: 12px 20px;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: 0 0 8px 0;
+        z-index: 100;
+        transition: top 0.2s;
+      }
+
+      .skip-link:focus
+      {
+        top: 0;
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+      }
+
+      /* ═══ A11y — Focus visible (WCAG 2.2 AA) ═══ */
+      :focus
+      {
+        outline: none;
+      }
+
+      :focus-visible
+      {
+        outline: 2px solid #2dd4bf;
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+
+      a:focus-visible,
+      button:focus-visible
+      {
+        outline: 2px solid #2dd4bf;
+        outline-offset: 3px;
+      }
+
+      input:focus-visible,
+      textarea:focus-visible,
+      select:focus-visible
+      {
+        outline: none;
+        border-color: #2dd4bf !important;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.25) !important;
+      }
+
+      /* ═══ A11y — Respeta preferencias de movimiento reducido ═══ */
+      @media (prefers-reduced-motion: reduce)
+      {
+        *,
+        *::before,
+        *::after
+        {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+
+      /* ═══ A11y — Sr-only utility para texto solo lectores de pantalla ═══ */
+      .sr-only
+      {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
     </style>
     <style data-grapesjs-styles="true">
       #icyrfq
@@ -297,9 +450,9 @@
     </div>
     <div class="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-accent-cyan/10 blur-[120px] rounded-full pointer-events-none z-0">
     </div>
-    <header id="header" class="fixed top-0 w-full z-50 glass-card border-b border-white/5 transition-all duration-300">
-      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between"><a href="#" class="flex items-center gap-2 group"><span class="font-bold text-lg tracking-tight"><span class="text-white">monoulabs</span><span class="text-transparent bg-clip-text bg-gradient-to-r from-accent-cyan to-brand-500">.ai</span></span></a>
-        <nav class="hidden md:flex items-center gap-8"><a href="#metricas" data-es="Métricas del Dataset" data-en="Dataset Metrics" class="text-sm font-medium text-gray-400 hover:text-white transition-colors">Métricas
+    <header id="header" role="banner" class="fixed top-0 w-full z-50 glass-card border-b border-white/5 transition-all duration-300">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between"><a href="#" aria-label="Monou Labs — Inicio" class="flex items-center gap-2 group"><span class="font-bold text-lg tracking-tight"><span class="text-white">monoulabs</span><span class="text-transparent bg-clip-text bg-gradient-to-r from-accent-cyan to-brand-500">.ai</span></span></a>
+        <nav aria-label="Navegación principal" class="hidden md:flex items-center gap-8"><a href="#metricas" data-es="Métricas del Dataset" data-en="Dataset Metrics" class="text-sm font-medium text-gray-400 hover:text-white transition-colors">Métricas
             del Dataset</a><a href="#dataset-intelligence" data-es="Dataset Intelligence" data-en="Dataset Intelligence" class="text-sm font-medium text-gray-400 hover:text-white transition-colors">Dataset
             Intelligence</a><a href="#juegos-monou" data-es="Juegos F2P" data-en="F2P Games" class="text-sm font-medium text-gray-400 hover:text-white transition-colors">Juegos
             F2P</a><a href="#juegos-terceros" data-es="Juegos Publishers" data-en="Publisher Games" class="text-sm font-medium text-gray-400 hover:text-white transition-colors">Juegos
@@ -308,12 +461,12 @@
         <div class="flex items-center gap-4">
           <div class="lang-switcher flex items-center gap-2 text-sm font-medium">
             <span data-lang="es" class="lang-option inactive">ES</span><span class="text-gray-600">|</span><span data-lang="en" class="lang-option active">EN</span></div><a href="#contacto" data-es="Contáctanos" data-en="Contact Us" class="hidden md:block px-4 py-2 text-sm font-semibold bg-white text-dark-900 rounded-lg hover:bg-gray-100 transition-colors">Contáctanos</a>
-        </div><button class="md:hidden text-gray-400 hover:text-white"><i class="fa-solid fa-bars text-xl"></i></button>
+        </div><button aria-label="Abrir menú de navegación" aria-expanded="false" class="md:hidden text-gray-400 hover:text-white"><i class="fa-solid fa-bars text-xl" aria-hidden="true"></i></button>
       </div>
     </header>
-    <main class="flex-1 relative z-10 pt-32 pb-24 flex flex-col gap-32">
+    <main id="main" role="main" class="flex-1 relative z-10 pt-32 pb-24 flex flex-col gap-32">
       <!-- HERO SECTION -->
-      <section id="hero" class="w-full max-w-5xl mx-auto px-6 text-center flex flex-col items-center">
+      <section id="hero" aria-label="Propuesta de valor — Gameplay Datasets para IA" class="w-full max-w-5xl mx-auto px-6 text-center flex flex-col items-center">
         <div data-link-key="dataset_badge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-dark-800/50 border border-brand-500/30 backdrop-blur-md mb-8">
           <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span><span data-link-field="label" data-es="Dataset v2.0 ya disponible" data-en="Dataset v2.0 now available" class="text-xs font-medium text-brand-400">Dataset v2.0 ya
             disponible</span></div>
@@ -329,9 +482,9 @@
             Contáctanos <i class="fa-solid fa-arrow-right text-sm"></i></a><a data-link-key="view_examples" href="#ejemplos" class="w-full sm:w-auto px-8 py-4 glass-card text-white font-medium rounded-xl hover:bg-dark-800 transition-all flex items-center justify-center gap-2 group border-white/10"><i class="fa-solid fa-play text-gray-400 group-hover:text-white transition-colors text-sm"></i><span data-link-field="label" data-es="Ver ejemplos" data-en="View examples">Ver
               ejemplos</span></a></div>
       </section><!-- MÉTRICAS DEL DATASET -->
-      <section id="metricas" class="w-full max-w-7xl mx-auto px-6">
+      <section id="metricas" aria-labelledby="metricas-title" class="w-full max-w-7xl mx-auto px-6">
         <div class="text-center mb-16">
-          <h2 data-es="Escala diseñada para IA" data-en="Scale designed for AI" class="text-3xl md:text-4xl font-bold text-white mb-4">Escala
+          <h2 id="metricas-title" data-es="Escala diseñada para IA" data-en="Scale designed for AI" class="text-3xl md:text-4xl font-bold text-white mb-4">Escala
             diseñada para IA</h2>
           <p data-es="Volumen masivo de datos crudos y estructurados listos para ingerir en tu pipeline de entrenamiento." data-en="Massive volume of raw and structured data ready to ingest into your training pipeline." class="text-gray-400 max-w-2xl mx-auto">Volumen masivo de datos
             crudos y estructurados listos para ingerir en tu pipeline de
@@ -364,11 +517,11 @@
           </div>
         </div>
       </section><!-- COMO FUNCIONA (Workflow) -->
-      <section id="como-funciona" class="w-full max-w-5xl mx-auto px-6">
+      <section id="como-funciona" aria-labelledby="como-funciona-title" class="w-full max-w-5xl mx-auto px-6">
         <div class="text-center mb-16">
           <p class="text-sm font-semibold text-brand-400 mb-3 tracking-widest uppercase">
             Pipeline</p>
-          <h2 data-es="¿Cómo funciona nuestro servicio?" data-en="How does our service work?" class="text-3xl md:text-4xl font-bold text-white">¿Cómo funciona
+          <h2 id="como-funciona-title" data-es="¿Cómo funciona nuestro servicio?" data-en="How does our service work?" class="text-3xl md:text-4xl font-bold text-white">¿Cómo funciona
             nuestro servicio?</h2>
         </div>
         <div class="glass-card rounded-2xl p-8 md:p-12 border border-white/5">
@@ -403,11 +556,11 @@
           </div>
         </div>
       </section><!-- DATASET INTELLIGENCE -->
-      <section id="dataset-intelligence" class="w-full max-w-7xl mx-auto px-6">
+      <section id="dataset-intelligence" aria-labelledby="dataset-intelligence-title" class="w-full max-w-7xl mx-auto px-6">
         <div class="text-center mb-16">
           <p data-es="Inteligencia de Datos" data-en="Data Intelligence" class="text-sm font-semibold text-brand-400 mb-3 tracking-widest uppercase">
             Inteligencia de Datos</p>
-          <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Dataset
+          <h2 id="dataset-intelligence-title" class="text-3xl md:text-4xl font-bold text-white mb-4">Dataset
             Intelligence</h2>
           <p data-es="Datos estructurados y enriquecidos con metadata avanzada para maximizar el rendimiento de tus modelos." data-en="Structured and enriched data with advanced metadata to maximize your models' performance." class="text-gray-400 max-w-2xl mx-auto">Datos estructurados y
             enriquecidos con metadata avanzada para maximizar el rendimiento de
@@ -454,12 +607,12 @@
           </div>
         </div>
       </section><!-- JUEGOS F2P WITH CAROUSEL -->
-      <section id="juegos-monou" class="w-full max-w-7xl mx-auto px-6">
+      <section id="juegos-monou" aria-labelledby="juegos-monou-title" class="w-full max-w-7xl mx-auto px-6">
         <div class="mb-12">
           <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/30 backdrop-blur-md mb-6">
-            <i class="fa-solid fa-gamepad text-brand-400 text-xs"></i><span class="text-xs font-medium text-brand-400">Monou Ecosystem</span>
+            <i class="fa-solid fa-gamepad text-brand-400 text-xs" aria-hidden="true"></i><span class="text-xs font-medium text-brand-400">Monou Ecosystem</span>
           </div>
-          <h2 data-es="Juegos F2P" data-en="F2P Games" class="text-3xl md:text-4xl font-bold text-white mb-4">Juegos F2P
+          <h2 id="juegos-monou-title" data-es="Juegos F2P" data-en="F2P Games" class="text-3xl md:text-4xl font-bold text-white mb-4">Juegos F2P
           </h2>
           <p data-es="Acceso total a la telemetría y metadata interna de nuestros títulos propios. Datos de primera mano con profundidad sin precedentes." data-en="Full access to telemetry and internal metadata of our own titles. First-hand data with unprecedented depth." class="text-gray-400 max-w-3xl">Acceso total a la telemetría y
             metadata interna de nuestros títulos propios. Datos de primera mano
@@ -607,7 +760,7 @@
             <div onclick="goToSlide(3)" class="carousel-indicator"></div>
           </div>
         </div>
-        <div id="icyrfq" class="md:hidden overflow-x-auto -mx-6 px-6 pb-4">
+        <div id="icyrfq" data-nosnippet aria-label="Catálogo F2P — vista móvil" class="md:hidden overflow-x-auto -mx-6 px-6 pb-4">
           <div id="ir9pjh" class="flex gap-4">
             <div data-game-slug="aventure" class="glass-card rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0">
               <div class="aspect-video bg-gradient-to-br from-brand-500/20 to-dark-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
@@ -718,12 +871,12 @@
           </div>
         </div>
       </section><!-- JUEGOS DE TERCEROS -->
-      <section id="juegos-terceros" class="w-full max-w-7xl mx-auto px-6">
+      <section id="juegos-terceros" aria-labelledby="juegos-terceros-title" class="w-full max-w-7xl mx-auto px-6">
         <div class="mb-12">
           <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-cyan/10 border border-accent-cyan/30 backdrop-blur-md mb-6">
-            <i class="fa-solid fa-globe text-accent-cyan text-xs"></i><span class="text-xs font-medium text-accent-cyan">AAA &amp;
+            <i class="fa-solid fa-globe text-accent-cyan text-xs" aria-hidden="true"></i><span class="text-xs font-medium text-accent-cyan">AAA &amp;
               Populares</span></div>
-          <h2 data-es="Juegos de Publishers" data-en="Publisher Games" class="text-3xl md:text-4xl font-bold text-white mb-4">Juegos de
+          <h2 id="juegos-terceros-title" data-es="Juegos de Publishers" data-en="Publisher Games" class="text-3xl md:text-4xl font-bold text-white mb-4">Juegos de
             Publishers</h2>
           <p data-es="Captura de gameplay de los títulos más populares de la industria. Datos visuales de alta calidad para visión computacional y comportamiento de jugadores." data-en="Gameplay capture from the industry's most popular titles. High-quality visual data for computer vision and player behavior." class="text-gray-400 max-w-3xl">Captura de gameplay de los títulos
             más populares de la industria. Datos visuales de alta calidad para
@@ -804,11 +957,11 @@
           </div>
         </div>
       </section><!-- FORMATO DE ENTREGA -->
-      <section id="formato-entrega" class="w-full max-w-7xl mx-auto px-6">
+      <section id="formato-entrega" aria-labelledby="formato-entrega-title" class="w-full max-w-7xl mx-auto px-6">
         <div class="text-center mb-16">
           <p data-es="Integración" data-en="Integration" class="text-sm font-semibold text-brand-400 mb-3 tracking-widest uppercase">
             Integración</p>
-          <h2 data-es="Formato de Entrega" data-en="Delivery Format" class="text-3xl md:text-4xl font-bold text-white mb-4">Formato de
+          <h2 id="formato-entrega-title" data-es="Formato de Entrega" data-en="Delivery Format" class="text-3xl md:text-4xl font-bold text-white mb-4">Formato de
             Entrega</h2>
           <p data-es="Datos listos para ingerir en tu pipeline de entrenamiento. Múltiples formatos y opciones de distribución." data-en="Data ready to ingest into your training pipeline. Multiple formats and distribution options." class="text-gray-400 max-w-2xl mx-auto">Datos listos para ingerir en
             tu pipeline de entrenamiento. Múltiples formatos y opciones de
@@ -871,31 +1024,31 @@
           </div>
         </div>
       </section><!-- CONTACTO / FORMULARIO -->
-      <section id="contacto" class="w-full max-w-3xl mx-auto px-6">
+      <section id="contacto" aria-labelledby="contacto-title" class="w-full max-w-3xl mx-auto px-6">
         <div class="glass-card rounded-2xl p-8 md:p-12 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
           <div class="text-center mb-10">
-            <h2 data-es="Solicitar Acceso al Dataset" data-en="Request Dataset Access" class="text-3xl font-bold text-white mb-4">Solicitar Acceso al
+            <h2 id="contacto-title" data-es="Solicitar Acceso al Dataset" data-en="Request Dataset Access" class="text-3xl font-bold text-white mb-4">Solicitar Acceso al
               Dataset</h2>
             <p data-es="Déjanos tus datos y nuestro equipo se pondrá en contacto contigo para discutir tus necesidades de datos de entrenamiento." data-en="Leave us your details and our team will contact you to discuss your training data needs." class="text-gray-400 text-sm">Déjanos tus datos y nuestro equipo
               se pondrá en contacto contigo para discutir tus necesidades de
               datos de entrenamiento.</p>
           </div>
-          <form id="ixmppy" action="javascript:void(0)" method="POST" class="space-y-6">
+          <form id="ixmppy" action="javascript:void(0)" method="POST" aria-labelledby="contacto-title" aria-describedby="contacto-form-help" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div class="space-y-2"><label data-es="Nombre completo" data-en="Full name" class="text-sm font-medium text-gray-300">Nombre
-                  completo</label><input name="nombre" type="text" required placeholder="Ej. Jane Doe" class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
+              <div class="space-y-2"><label for="contact-nombre" data-es="Nombre completo" data-en="Full name" class="text-sm font-medium text-gray-300">Nombre
+                  completo</label><input id="contact-nombre" name="nombre" type="text" required autocomplete="name" placeholder="Ej. Jane Doe" class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
               </div>
-              <div class="space-y-2"><label data-es="Email corporativo" data-en="Corporate email" class="text-sm font-medium text-gray-300">Email
-                  corporativo</label><input name="email" type="email" required placeholder="jane@empresa.ai" class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
+              <div class="space-y-2"><label for="contact-email" data-es="Email corporativo" data-en="Corporate email" class="text-sm font-medium text-gray-300">Email
+                  corporativo</label><input id="contact-email" name="email" type="email" required autocomplete="email" inputmode="email" placeholder="jane@empresa.ai" class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
               </div>
             </div>
-            <div class="space-y-2"><label data-es="Empresa / Organización" data-en="Company / Organization" class="text-sm font-medium text-gray-300">Empresa /
-                Organización</label><input name="empresa" type="text" placeholder="Nombre de tu laboratorio o startup" class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
+            <div class="space-y-2"><label for="contact-empresa" data-es="Empresa / Organización" data-en="Company / Organization" class="text-sm font-medium text-gray-300">Empresa /
+                Organización</label><input id="contact-empresa" name="empresa" type="text" autocomplete="organization" placeholder="Nombre de tu laboratorio o startup" class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
             </div>
             <!-- honeypot anti-bot -->
             <input name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
-            <div class="space-y-2"><label data-es="Caso de uso principal" data-en="Main use case" class="text-sm font-medium text-gray-300">Caso de uso
-                principal</label><select name="caso_uso" class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all appearance-none">
+            <div class="space-y-2"><label for="contact-caso-uso" data-es="Caso de uso principal" data-en="Main use case" class="text-sm font-medium text-gray-300">Caso de uso
+                principal</label><select id="contact-caso-uso" name="caso_uso" class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all appearance-none">
                 <option value="" disabled="" selected="" data-es="Selecciona una opción" data-en="Select an option">
                   Selecciona una opción</option>
                 <option value="world-models" data-es="Entrenamiento de World Models" data-en="World Models Training">Entrenamiento de World Models
@@ -908,16 +1061,16 @@
                 <option value="other" data-es="Otro" data-en="Other">Otro
                 </option>
               </select></div>
-            <div class="space-y-2"><label data-es="Mensaje adicional (Opcional)" data-en="Additional message (Optional)" class="text-sm font-medium text-gray-300">Mensaje adicional
-                (Opcional)</label><textarea name="mensaje" rows="4" placeholder="Cuéntanos más sobre el volumen de datos o juegos específicos que buscas..." class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none"></textarea>
+            <div class="space-y-2"><label for="contact-mensaje" data-es="Mensaje adicional (Opcional)" data-en="Additional message (Optional)" class="text-sm font-medium text-gray-300">Mensaje adicional
+                (Opcional)</label><textarea id="contact-mensaje" name="mensaje" rows="4" placeholder="Cuéntanos más sobre el volumen de datos o juegos específicos que buscas..." class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none"></textarea>
             </div><button type="submit" class="w-full py-4 bg-white text-dark-900 font-bold rounded-xl hover:bg-gray-100 transition-colors mt-4 flex items-center justify-center gap-2"><span data-es="Enviar Solicitud" data-en="Send Request">Enviar
-                Solicitud</span> <i class="fa-solid fa-paper-plane text-sm"></i></button>
-            <p data-es="Tu solicitud llega directamente a nuestro equipo. Respondemos en menos de 24 horas." data-en="Your request goes directly to our team. We reply within 24 hours." class="text-xs text-center text-gray-500 mt-4">Tu solicitud llega directamente a nuestro equipo. Respondemos en menos de 24 horas.</p>
+                Solicitud</span> <i class="fa-solid fa-paper-plane text-sm" aria-hidden="true"></i></button>
+            <p id="contacto-form-help" data-es="Tu solicitud llega directamente a nuestro equipo. Respondemos en menos de 24 horas." data-en="Your request goes directly to our team. We reply within 24 hours." class="text-xs text-center text-gray-500 mt-4">Tu solicitud llega directamente a nuestro equipo. Respondemos en menos de 24 horas.</p>
           </form>
         </div>
       </section>
     </main>
-    <footer id="footer" class="w-full border-t border-white/5 bg-dark-900/50 backdrop-blur-lg relative z-10 py-12">
+    <footer id="footer" role="contentinfo" aria-label="Pie de página" class="w-full border-t border-white/5 bg-dark-900/50 backdrop-blur-lg relative z-10 py-12">
       <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
         <div class="flex items-center gap-2"><span class="font-bold text-lg tracking-tight"><span class="text-white">monoulabs</span><span class="text-gray-500">.ai</span></span></div>
         <div class="flex items-center gap-6 text-sm text-gray-500"><a data-link-key="privacy_terms" href="#" data-es="Términos de Privacidad" data-en="Privacy Terms" class="hover:text-white transition-colors">Términos de
