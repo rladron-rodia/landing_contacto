@@ -13,14 +13,14 @@
     <!-- ═══ Hreflang bilingüe (toggle ES/EN dinámico en la misma URL) ═══ -->
     <link rel="alternate" hreflang="es" href="https://rladron-rodia.github.io/landing_contacto/">
     <link rel="alternate" hreflang="en" href="https://rladron-rodia.github.io/landing_contacto/?lang=en">
-    <link rel="alternate" hreflang="x-default" href="https://rladron-rodia.github.io/landing_contacto/">
+    <link rel="alternate" hreflang="x-default" href="https://rladron-rodia.github.io/landing_contacto/?lang=en">
 
     <!-- ═══ Open Graph (LinkedIn, Slack, Facebook) ═══ -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://rladron-rodia.github.io/landing_contacto/">
     <meta property="og:title" content="Gameplay Datasets para IA y World Models | Monou Labs">
     <meta property="og:description" content="+10K horas de gameplay curado para entrenar agentes de IA. Datasets para Reinforcement Learning y Behavior Cloning con telemetría completa.">
-    <meta property="og:image" content="https://rladron-rodia.github.io/landing_contacto/og-preview.png">
+    <meta property="og:image" content="https://rladron-rodia.github.io/landing_contacto/og-preview.svg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Monou Labs — Gameplay Datasets para entrenar agentes de IA">
@@ -32,7 +32,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Gameplay Datasets for AI Training | Monou Labs">
     <meta name="twitter:description" content="+10K hours of curated gameplay data for training AI agents. Datasets for RL, Behavior Cloning, World Models.">
-    <meta name="twitter:image" content="https://rladron-rodia.github.io/landing_contacto/og-preview.png">
+    <meta name="twitter:image" content="https://rladron-rodia.github.io/landing_contacto/og-preview.svg">
 
     <!-- ═══ Performance hints — preconnect a CDN/S3 + Google Fonts ═══ -->
     <link rel="preconnect" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
@@ -86,7 +86,8 @@
     <!-- ═══ CSS / fonts / scripts externos ═══ -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap"></noscript>
     <script>
       window.FontAwesomeConfig = {
         autoReplaceSvg: 'nest'
@@ -331,8 +332,7 @@
       </section><!-- MÉTRICAS DEL DATASET -->
       <section id="metricas" class="w-full max-w-7xl mx-auto px-6">
         <div class="text-center mb-16">
-          <h2 data-es="Escala diseñada para IA" data-en="Scale designed for AI" class="text-3xl md:text-4xl font-bold text-white mb-4">Escala
-            diseñada para IA</h2>
+          <h2 data-es="Datasets de entrenamiento a escala para IA" data-en="Training datasets at AI scale" class="text-3xl md:text-4xl font-bold text-white mb-4">Datasets de entrenamiento a escala para IA</h2>
           <p data-es="Volumen masivo de datos crudos y estructurados listos para ingerir en tu pipeline de entrenamiento." data-en="Massive volume of raw and structured data ready to ingest into your training pipeline." class="text-gray-400 max-w-2xl mx-auto">Volumen masivo de datos
             crudos y estructurados listos para ingerir en tu pipeline de
             entrenamiento.</p>
@@ -368,8 +368,7 @@
         <div class="text-center mb-16">
           <p class="text-sm font-semibold text-brand-400 mb-3 tracking-widest uppercase">
             Pipeline</p>
-          <h2 data-es="¿Cómo funciona nuestro servicio?" data-en="How does our service work?" class="text-3xl md:text-4xl font-bold text-white">¿Cómo funciona
-            nuestro servicio?</h2>
+          <h2 data-es="Cómo funciona el pipeline de datos de gameplay" data-en="How does the gameplay data pipeline work?" class="text-3xl md:text-4xl font-bold text-white">Cómo funciona el pipeline de datos de gameplay</h2>
         </div>
         <div class="glass-card rounded-2xl p-8 md:p-12 border border-white/5">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
@@ -407,8 +406,7 @@
         <div class="text-center mb-16">
           <p data-es="Inteligencia de Datos" data-en="Data Intelligence" class="text-sm font-semibold text-brand-400 mb-3 tracking-widest uppercase">
             Inteligencia de Datos</p>
-          <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Dataset
-            Intelligence</h2>
+          <h2 data-es="Anotaciones para Reinforcement Learning y Behavior Cloning" data-en="Annotations for Reinforcement Learning &amp; Behavior Cloning" class="text-3xl md:text-4xl font-bold text-white mb-4">Anotaciones para Reinforcement Learning y Behavior Cloning</h2>
           <p data-es="Datos estructurados y enriquecidos con metadata avanzada para maximizar el rendimiento de tus modelos." data-en="Structured and enriched data with advanced metadata to maximize your models' performance." class="text-gray-400 max-w-2xl mx-auto">Datos estructurados y
             enriquecidos con metadata avanzada para maximizar el rendimiento de
             tus modelos.</p>
@@ -459,8 +457,7 @@
           <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/30 backdrop-blur-md mb-6">
             <i class="fa-solid fa-gamepad text-brand-400 text-xs"></i><span class="text-xs font-medium text-brand-400">Monou Ecosystem</span>
           </div>
-          <h2 data-es="Juegos F2P" data-en="F2P Games" class="text-3xl md:text-4xl font-bold text-white mb-4">Juegos F2P
-          </h2>
+          <h2 data-es="Catálogo F2P — telemetría de 250K+ sesiones por juego" data-en="F2P Catalog — 250K+ sessions telemetry per game" class="text-3xl md:text-4xl font-bold text-white mb-4">Catálogo F2P — telemetría de 250K+ sesiones por juego</h2>
           <p data-es="Acceso total a la telemetría y metadata interna de nuestros títulos propios. Datos de primera mano con profundidad sin precedentes." data-en="Full access to telemetry and internal metadata of our own titles. First-hand data with unprecedented depth." class="text-gray-400 max-w-3xl">Acceso total a la telemetría y
             metadata interna de nuestros títulos propios. Datos de primera mano
             con profundidad sin precedentes.</p>
@@ -723,8 +720,7 @@
           <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-cyan/10 border border-accent-cyan/30 backdrop-blur-md mb-6">
             <i class="fa-solid fa-globe text-accent-cyan text-xs"></i><span class="text-xs font-medium text-accent-cyan">AAA &amp;
               Populares</span></div>
-          <h2 data-es="Juegos de Publishers" data-en="Publisher Games" class="text-3xl md:text-4xl font-bold text-white mb-4">Juegos de
-            Publishers</h2>
+          <h2 data-es="Datasets de publishers AAA para visión computacional" data-en="AAA publisher gameplay datasets for computer vision" class="text-3xl md:text-4xl font-bold text-white mb-4">Datasets de publishers AAA para visión computacional</h2>
           <p data-es="Captura de gameplay de los títulos más populares de la industria. Datos visuales de alta calidad para visión computacional y comportamiento de jugadores." data-en="Gameplay capture from the industry's most popular titles. High-quality visual data for computer vision and player behavior." class="text-gray-400 max-w-3xl">Captura de gameplay de los títulos
             más populares de la industria. Datos visuales de alta calidad para
             visión computacional y comportamiento de jugadores.</p>
@@ -808,8 +804,7 @@
         <div class="text-center mb-16">
           <p data-es="Integración" data-en="Integration" class="text-sm font-semibold text-brand-400 mb-3 tracking-widest uppercase">
             Integración</p>
-          <h2 data-es="Formato de Entrega" data-en="Delivery Format" class="text-3xl md:text-4xl font-bold text-white mb-4">Formato de
-            Entrega</h2>
+          <h2 data-es="Entrega de datasets: S3, API REST y formatos personalizados" data-en="Dataset delivery: S3, REST API and custom formats" class="text-3xl md:text-4xl font-bold text-white mb-4">Entrega de datasets: S3, API REST y formatos personalizados</h2>
           <p data-es="Datos listos para ingerir en tu pipeline de entrenamiento. Múltiples formatos y opciones de distribución." data-en="Data ready to ingest into your training pipeline. Multiple formats and distribution options." class="text-gray-400 max-w-2xl mx-auto">Datos listos para ingerir en
             tu pipeline de entrenamiento. Múltiples formatos y opciones de
             distribución.</p>
@@ -874,8 +869,7 @@
       <section id="contacto" class="w-full max-w-3xl mx-auto px-6">
         <div class="glass-card rounded-2xl p-8 md:p-12 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
           <div class="text-center mb-10">
-            <h2 data-es="Solicitar Acceso al Dataset" data-en="Request Dataset Access" class="text-3xl font-bold text-white mb-4">Solicitar Acceso al
-              Dataset</h2>
+            <h2 data-es="Solicitar acceso — dataset de gameplay para IA" data-en="Request access — gameplay dataset for AI training" class="text-3xl font-bold text-white mb-4">Solicitar acceso — dataset de gameplay para IA</h2>
             <p data-es="Déjanos tus datos y nuestro equipo se pondrá en contacto contigo para discutir tus necesidades de datos de entrenamiento." data-en="Leave us your details and our team will contact you to discuss your training data needs." class="text-gray-400 text-sm">Déjanos tus datos y nuestro equipo
               se pondrá en contacto contigo para discutir tus necesidades de
               datos de entrenamiento.</p>
@@ -910,10 +904,8 @@
               </select></div>
             <div class="space-y-2"><label data-es="Mensaje adicional (Opcional)" data-en="Additional message (Optional)" class="text-sm font-medium text-gray-300">Mensaje adicional
                 (Opcional)</label><textarea name="mensaje" rows="4" placeholder="Cuéntanos más sobre el volumen de datos o juegos específicos que buscas..." class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none"></textarea>
-            </div><button type="submit" class="w-full py-4 bg-white text-dark-900 font-bold rounded-xl hover:bg-gray-100 transition-colors mt-4 flex items-center justify-center gap-2"><span data-es="Enviar Solicitud" data-en="Send Request">Enviar
-                Solicitud</span> <i class="fa-solid fa-paper-plane text-sm"></i></button>
-            <p data-es="Al enviar este formulario, enviaremos un correo a rodrigo.ladron@monou.gg" data-en="By submitting this form, we will send an email to rodrigo.ladron@monou.gg" class="text-xs text-center text-gray-500 mt-4">Al enviar este
-              formulario, enviaremos un correo a rodrigo.ladron@monou.gg</p>
+            </div><button type="submit" class="w-full py-4 bg-white text-dark-900 font-bold rounded-xl hover:bg-gray-100 transition-colors mt-4 flex items-center justify-center gap-2"><span data-es="Solicitar acceso — respondemos en 24h" data-en="Request access — we reply within 24h">Solicitar acceso — respondemos en 24h</span> <i class="fa-solid fa-paper-plane text-sm"></i></button>
+            <p data-es="Tu solicitud llega directamente a nuestro equipo. Respondemos en menos de 24 horas." data-en="Your request goes directly to our team. We reply within 24 hours." class="text-xs text-center text-gray-500 mt-4">Tu solicitud llega directamente a nuestro equipo. Respondemos en menos de 24 horas.</p>
           </form>
         </div>
       </section>
