@@ -42,6 +42,98 @@
   const setToken   = (t) => localStorage.setItem(TOKEN_KEY, t);
   const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
+  // ---------- Nav labels personalizables (persisten en localStorage) ----------
+  const NAV_LABELS_KEY = "monou_nav_labels";
+
+  function readNavLabels() {
+    try { return JSON.parse(localStorage.getItem(NAV_LABELS_KEY) || "{}"); }
+    catch (e) { return {}; }
+  }
+
+  function writeNavLabels(map) {
+    try { localStorage.setItem(NAV_LABELS_KEY, JSON.stringify(map)); } catch (e) {}
+  }
+
+  function applySavedNavLabels() {
+    const saved = readNavLabels();
+    document.querySelectorAll(".nav-btn").forEach(btn => {
+      const view = btn.dataset.view;
+      const labelEl = btn.querySelector(".nav-label");
+      if (!labelEl || !view) return;
+      // Guardar el label por defecto (para poder restaurarlo)
+      if (!btn.dataset.defaultLabel) {
+        btn.dataset.defaultLabel = labelEl.textContent.trim();
+      }
+      if (saved[view]) labelEl.textContent = saved[view];
+    });
+  }
+
+  function startNavLabelEdit(navBtn) {
+    const labelEl = navBtn.querySelector(".nav-label");
+    if (!labelEl) return;
+    // Si ya hay un input editando, no hacer nada
+    if (navBtn.querySelector("input.nav-label-input")) return;
+
+    const view = navBtn.dataset.view;
+    const current = labelEl.textContent.trim();
+    const defaultLabel = navBtn.dataset.defaultLabel || current;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = current;
+    input.maxLength = 40;
+    input.className = "nav-label-input flex-1 bg-dark-900 border border-brand-500 rounded px-2 py-0.5 text-sm focus:outline-none";
+    labelEl.replaceWith(input);
+    // Pequeño hack: poner placeholder del default para que el user lo vea
+    input.setAttribute("placeholder", defaultLabel);
+    input.focus();
+    input.select();
+
+    let committed = false;
+    function commit() {
+      if (committed) return;
+      committed = true;
+      const value = input.value.trim();
+      const map = readNavLabels();
+      let finalLabel;
+      if (!value) {
+        // Empty → reset al default
+        delete map[view];
+        finalLabel = defaultLabel;
+      } else if (value === defaultLabel) {
+        // Igual que default → quitar override
+        delete map[view];
+        finalLabel = defaultLabel;
+      } else {
+        map[view] = value;
+        finalLabel = value;
+      }
+      writeNavLabels(map);
+
+      const newSpan = document.createElement("span");
+      newSpan.className = "nav-label flex-1 truncate";
+      newSpan.textContent = finalLabel;
+      input.replaceWith(newSpan);
+    }
+
+    function cancel() {
+      if (committed) return;
+      committed = true;
+      const newSpan = document.createElement("span");
+      newSpan.className = "nav-label flex-1 truncate";
+      newSpan.textContent = current;
+      input.replaceWith(newSpan);
+    }
+
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter")  { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { e.preventDefault(); cancel(); }
+    });
+    // Bloquea el click del botón mientras se edita
+    input.addEventListener("click", (e) => e.stopPropagation());
+  }
+
   // ---------- Utilidades ----------
   function fmtDate(iso) {
     if (!iso) return "—";
@@ -352,8 +444,22 @@
   });
 
   $$(".nav-btn").forEach(btn => {
-    btn.addEventListener("click", () => selectView(btn.dataset.view));
+    btn.addEventListener("click", (e) => {
+      // Si el click vino del lápiz de editar nombre, abre edición y no navega
+      if (e.target.closest(".nav-edit-btn")) {
+        e.preventDefault();
+        e.stopPropagation();
+        startNavLabelEdit(btn);
+        return;
+      }
+      // Si el click vino del input de edición, ignorar (no navegar)
+      if (e.target.closest(".nav-label-input")) return;
+      selectView(btn.dataset.view);
+    });
   });
+
+  // Aplica labels guardados al cargar
+  applySavedNavLabels();
 
   $("#logout-btn").addEventListener("click", () => { clearToken(); showLogin(); });
 
