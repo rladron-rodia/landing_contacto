@@ -698,10 +698,10 @@ data-game-field="tag" data-tag-index="1"                       class="px-2 py-1 
             </div><!-- Slide 4: Catalog -->
             <div class="carousel-item">
               <div class="flex items-center justify-center h-full">
-                <div
+                <div data-link-key="view_full_catalog"
                   class="glass-card rounded-2xl p-12 border border-white/5 hover:border-brand-500/30 transition-all group cursor-pointer text-center max-w-md">
                   <div
-                    class="w-24 h-24 mx-auto bg-gradient-to-br from-brand-500/20 to-accent-cyan/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    class="w-24 h-24 mx-auto bg-gradient-to-br from-brand-500/20 to-accent-cyan/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform overflow-hidden">
                     <i
                       class="fa-solid fa-grid-2-plus text-4xl text-transparent bg-clip-text bg-gradient-to-br from-brand-400 to-accent-cyan"></i>
                   </div>
@@ -714,9 +714,9 @@ data-game-field="tag" data-tag-index="1"                       class="px-2 py-1 
                     class="text-gray-400 mb-6 leading-relaxed">Explora nuestro
                     catálogo completo de juegos F2P con datos de entrenamiento
                     disponibles para tu proyecto de IA.</p>
-                  <div
+                  <div data-link-field="cta"
                     class="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-brand-500 to-accent-cyan text-white font-semibold rounded-xl hover:from-brand-600 hover:to-accent-cyan/90 transition-all group-hover:shadow-[0_0_30px_rgba(20,184,166,0.3)]">
-                    <span data-es="Ver Catálogo Completo"
+                    <span data-link-field="label" data-es="Ver Catálogo Completo"
                       data-en="View Full Catalog">Ver Catálogo Completo</span><i
                       class="fa-solid fa-arrow-right text-sm"></i></div>
                 </div>
@@ -896,10 +896,10 @@ data-game-field="tag" data-tag-index="0"                   data-es="480K sesione
 data-game-field="tag" data-tag-index="1"                   class="px-2 py-1 bg-dark-800 rounded text-gray-400">720p</span>
               </div>
             </div>
-            <div
+            <div data-link-key="view_full_catalog"
               class="glass-card rounded-xl p-6 border border-white/5 hover:border-brand-500/30 transition-all w-64 flex-shrink-0 flex flex-col items-center justify-center text-center">
               <div
-                class="w-16 h-16 mx-auto bg-gradient-to-br from-brand-500/20 to-accent-cyan/20 rounded-xl flex items-center justify-center mb-4">
+                class="w-16 h-16 mx-auto bg-gradient-to-br from-brand-500/20 to-accent-cyan/20 rounded-xl flex items-center justify-center mb-4 overflow-hidden">
                 <i
                   class="fa-solid fa-grid-2-plus text-2xl text-transparent bg-clip-text bg-gradient-to-br from-brand-400 to-accent-cyan"></i>
               </div>
@@ -911,7 +911,7 @@ data-game-field="tag" data-tag-index="1"                   class="px-2 py-1 bg-d
                 data-en="Explore our complete catalog"
                 class="text-xs text-gray-400 mb-3">Explora nuestro catálogo
                 completo</p>
-              <div
+              <div data-link-field="cta"
                 class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-brand-500 to-accent-cyan text-white text-xs font-semibold rounded-lg">
                 <span data-es="Ver Catálogo" data-en="View Catalog">Ver
                   Catálogo</span><i class="fa-solid fa-arrow-right text-xs"></i>
@@ -1412,6 +1412,7 @@ data-game-field="tag" data-tag-index="1"                   class="px-2 py-1 bg-d
     <script src="server/contact-form.js" defer></script>
     <script src="server/stats-loader.js" defer></script>
     <script src="server/games-loader.js" defer></script>
+    <script src="server/links-loader.js" defer></script>
   </body>
 
 </html>

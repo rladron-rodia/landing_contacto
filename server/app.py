@@ -372,6 +372,55 @@ def admin_delete_game(slug):
     return jsonify({"ok": True}), 200
 
 
+# ---------------------------------------------------------------------------
+# Site links — endpoint público y admin CRUD
+# ---------------------------------------------------------------------------
+
+@app.route("/api/site-links", methods=["GET"])
+def get_site_links():
+    """Devuelve los enlaces/imágenes configurables del sitio. Público."""
+    return jsonify({"ok": True, "links": db.list_site_links(include_meta=False)}), 200
+
+
+@app.route("/api/admin/site-links", methods=["GET"])
+def admin_list_site_links():
+    """Lista site_links con metadatos para el admin."""
+    if not _is_admin(request):
+        return _unauthorized()
+    return jsonify({"ok": True, "links": db.list_site_links(include_meta=True)}), 200
+
+
+@app.route("/api/admin/site-links", methods=["POST"])
+def admin_upsert_site_link():
+    """Crea o actualiza un site_link."""
+    if not _is_admin(request):
+        return _unauthorized()
+    data = request.get_json(silent=True) or {}
+    try:
+        row = db.upsert_site_link(data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Error guardando site_link")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    return jsonify({"ok": True, "link": row}), 200
+
+
+@app.route("/api/admin/site-links/<key>", methods=["DELETE"])
+def admin_delete_site_link(key):
+    """Borra un site_link por key."""
+    if not _is_admin(request):
+        return _unauthorized()
+    try:
+        deleted = db.delete_site_link(key)
+    except Exception as exc:
+        app.logger.exception("Error borrando site_link")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    if not deleted:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True}), 200
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)

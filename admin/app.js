@@ -33,6 +33,7 @@
   let allStats      = [];
   let allGames      = [];
   let allPublishers = [];
+  let allLinks      = [];
   let currentView   = "contacts";
 
   // ---------- Token ----------
@@ -104,10 +105,12 @@
     $("#stats-view").classList.toggle("hidden", name !== "stats");
     $("#games-view").classList.toggle("hidden", name !== "games");
     $("#publishers-view").classList.toggle("hidden", name !== "publishers");
+    $("#links-view").classList.toggle("hidden", name !== "links");
     if (name === "contacts")   loadContacts();
     if (name === "stats")      loadStats();
     if (name === "games")      loadGames();
     if (name === "publishers") loadPublishers();
+    if (name === "links")      loadLinks();
   }
 
   // ============================================================
@@ -631,6 +634,148 @@
       deletePublisher(delBtn.dataset.slug);
     }
   });
+
+  // ============================================================
+  //   SITE LINKS (Configuración URLs)
+  // ============================================================
+
+  function renderLinksRows() {
+    $("#links-count").textContent = `${allLinks.length}`;
+    if (!allLinks.length) {
+      $("#links-tbody").innerHTML = `
+        <tr><td colspan="7" class="px-4 py-12 text-center text-gray-500">
+          No hay enlaces. Pulsa <strong>Nuevo</strong> para crear el primero.
+        </td></tr>`;
+      $("#links-loading").classList.add("hidden");
+      $("#links-error").classList.add("hidden");
+      $("#links-table-wrap").classList.remove("hidden");
+      return;
+    }
+    $("#links-tbody").innerHTML = allLinks.map(l => {
+      const labelEs = l.label_es || "";
+      const labelEn = l.label_en || "";
+      const labelHtml = labelEs && labelEn && labelEs !== labelEn
+        ? `<div class="font-medium">${escapeHtml(labelEs)}</div>
+           <div class="text-gray-500 text-xs italic">${escapeHtml(labelEn)}</div>`
+        : escapeHtml(labelEs || labelEn || "—");
+      const img = l.image_url
+        ? `<img src="${escapeHtml(l.image_url)}" alt="" class="w-12 h-12 object-cover rounded">`
+        : `<div class="w-12 h-12 bg-dark-900 rounded flex items-center justify-center"><i class="fa-solid fa-image text-gray-600 text-xs"></i></div>`;
+      const urlCell = l.url
+        ? `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" class="text-brand-400 hover:underline text-xs break-all">${escapeHtml(l.url)}</a>`
+        : `<span class="text-gray-600 text-xs">— sin URL</span>`;
+      return `
+        <tr class="hover:bg-white/5">
+          <td class="px-4 py-3 text-gray-500">${escapeHtml(l.display_order ?? 0)}</td>
+          <td class="px-4 py-3">${img}</td>
+          <td class="px-4 py-3 font-mono text-brand-400 text-xs">${escapeHtml(l.key)}</td>
+          <td class="px-4 py-3">${labelHtml}</td>
+          <td class="px-4 py-3 max-w-xs">${urlCell}</td>
+          <td class="px-4 py-3 text-gray-400 text-xs max-w-xs truncate">${escapeHtml(l.description || "—")}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button class="link-edit text-gray-400 hover:text-brand-400 p-2" data-key="${escapeHtml(l.key)}" title="Editar">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button class="link-delete text-gray-400 hover:text-red-400 p-2" data-key="${escapeHtml(l.key)}" title="Borrar">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+    }).join("");
+    $("#links-loading").classList.add("hidden");
+    $("#links-error").classList.add("hidden");
+    $("#links-table-wrap").classList.remove("hidden");
+  }
+
+  async function loadLinks() {
+    $("#links-loading").classList.remove("hidden");
+    $("#links-error").classList.add("hidden");
+    $("#links-table-wrap").classList.add("hidden");
+    try {
+      const json = await api("GET", "/api/admin/site-links");
+      allLinks = json.links || [];
+      renderLinksRows();
+    } catch (err) {
+      if (err.message === "Token inválido") return showLogin(err.message);
+      $("#links-error-msg").textContent = err.message;
+      $("#links-loading").classList.add("hidden");
+      $("#links-error").classList.remove("hidden");
+    }
+  }
+
+  function refreshLinkImagePreview() {
+    const url = $("#link-image").value.trim();
+    const wrap = $("#link-image-preview-wrap");
+    const img  = $("#link-image-preview");
+    if (url) { img.src = url; wrap.classList.remove("hidden"); }
+    else     { wrap.classList.add("hidden"); }
+  }
+
+  function openLinkModal(link) {
+    const isNew = !link;
+    $("#link-modal-title").textContent = isNew ? "Nuevo enlace" : "Editar enlace";
+    $("#link-form-error").classList.add("hidden");
+    $("#link-key").value         = link ? link.key : "";
+    $("#link-key").disabled       = !isNew;
+    $("#link-description").value  = link ? (link.description || "") : "";
+    $("#link-url").value          = link ? (link.url || "") : "";
+    $("#link-image").value        = link ? (link.image_url || "") : "";
+    $("#link-label-es").value     = link ? (link.label_es || "") : "";
+    $("#link-label-en").value     = link ? (link.label_en || "") : "";
+    $("#link-order").value        = link ? (link.display_order ?? 0) : 0;
+    refreshLinkImagePreview();
+    openModal("#link-modal");
+    setTimeout(() => $("#link-url").focus(), 0);
+  }
+
+  async function submitLinkForm(e) {
+    e.preventDefault();
+    $("#link-form-error").classList.add("hidden");
+    const payload = {
+      key:           $("#link-key").value.trim(),
+      description:   $("#link-description").value.trim(),
+      url:           $("#link-url").value.trim(),
+      image_url:     $("#link-image").value.trim(),
+      label_es:      $("#link-label-es").value.trim(),
+      label_en:      $("#link-label-en").value.trim(),
+      display_order: parseInt($("#link-order").value, 10) || 0,
+    };
+    try {
+      await api("POST", "/api/admin/site-links", payload);
+      closeAllModals();
+      try { localStorage.removeItem("monou_site_links_v1"); } catch (e) {}
+      loadLinks();
+    } catch (err) {
+      $("#link-form-error").textContent = err.message;
+      $("#link-form-error").classList.remove("hidden");
+    }
+  }
+
+  async function deleteLink(key) {
+    if (!confirm(`¿Borrar el enlace "${key}"?`)) return;
+    try {
+      await api("DELETE", `/api/admin/site-links/${encodeURIComponent(key)}`);
+      try { localStorage.removeItem("monou_site_links_v1"); } catch (e) {}
+      loadLinks();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
+  $("#links-refresh").addEventListener("click", loadLinks);
+  $("#links-new").addEventListener("click", () => openLinkModal(null));
+  $("#links-tbody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".link-edit");
+    const delBtn  = e.target.closest(".link-delete");
+    if (editBtn) {
+      const l = allLinks.find(x => x.key === editBtn.dataset.key);
+      if (l) openLinkModal(l);
+    } else if (delBtn) {
+      deleteLink(delBtn.dataset.key);
+    }
+  });
+  $("#link-form").addEventListener("submit", submitLinkForm);
+  $("#link-image").addEventListener("input", refreshLinkImagePreview);
 
   // Modales
   $$(".modal-close").forEach(btn => btn.addEventListener("click", closeAllModals));
