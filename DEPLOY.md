@@ -1,88 +1,107 @@
 # Despliegue — Monou.gg landing
 
 Frontend (HTML estático) → **GitHub Pages**
-Backend (Flask + SMTP) → **Render**
+Backend (Flask + Resend HTTP API) → **Render**
+Base de datos → **Postgres en Render** (auto-provisionado vía Blueprint)
 
-URL final:
+URLs finales:
 - Landing: `https://rladron-rodia.github.io/landing_contacto/`
-- API: `https://landing-contacto-backend.onrender.com/api/contact`
+- Admin:   `https://rladron-rodia.github.io/landing_contacto/admin/`
+- API:     `https://landing-contacto-backend.onrender.com`
 
-## 1. Backend en Render (5 min)
+## 1. Backend en Render (Blueprint)
 
-### 1.1 Crea la cuenta
-1. Ve a https://render.com y haz **Sign up with GitHub**.
-2. Autoriza Render a leer tu repo `rladron-rodia/landing_contacto`.
+### 1.1 Crear cuenta y conectar repo
 
-### 1.2 Crea el servicio
-1. En el dashboard de Render pulsa **New +** → **Blueprint**.
-2. Selecciona el repo `rladron-rodia/landing_contacto`.
-3. Render detectará el archivo `render.yaml` y mostrará el servicio
-   `landing-contacto-backend`.
-4. Pulsa **Apply**.
+1. https://render.com → **Sign up with GitHub**
+2. Autoriza Render a leer `rladron-rodia/landing_contacto`
 
-### 1.3 Configura el secret de Gmail
-Render te pedirá el valor de la única variable marcada `sync: false` —
-`SMTP_PASSWORD`. Pega tu **App Password** de Gmail (16 caracteres, sin
-espacios). Luego pulsa **Apply**.
+### 1.2 Aplicar el Blueprint
 
-> Genera la App Password en https://myaccount.google.com/apppasswords
-> (requiere verificación en 2 pasos activada en tu cuenta Google).
+Render lee `render.yaml` automáticamente y crea:
+- Web service `landing-contacto-backend` (gunicorn)
+- Database Postgres `landing-contacto-db`
+- Conexión: la `DATABASE_URL` se inyecta automáticamente al web service
 
-### 1.4 Espera el primer build (~3 min)
-Cuando el deploy termine verás en verde:
+1. Dashboard → **New +** → **Blueprint**
+2. Selecciona el repo → **Apply**
+3. Render pide los secrets marcados `sync: false`:
+   - `RESEND_API_KEY` — generada en https://resend.com/api-keys
+   - `ADMIN_TOKEN` — genera uno con `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
 
-```
-==> Your service is live at https://landing-contacto-backend.onrender.com
-```
+### 1.3 Configurar Resend
 
-Verifica:
+Ve a https://resend.com (recomiendo registrarte con `rodrigo.ladron@monou.gg`).
+
+**Plan free sin dominio verificado**:
+- `MAIL_FROM = Monou.gg Landing <onboarding@resend.dev>`
+- `MAIL_TO = email_con_el_que_te_registraste`
+
+**Plan free con `monou.gg` verificado** (https://resend.com/domains):
+- `MAIL_FROM = Monou.gg <contacto@monou.gg>`
+- `MAIL_TO = cualquier_destinatario`
+
+Tras el primer build, verifica:
 
 ```bash
 curl https://landing-contacto-backend.onrender.com/api/health
-# {"ok":true,"service":"monou-contact"}
+# {"db":true,"email_provider":"resend","ok":true,"service":"monou-contact"}
 ```
 
 > ⚠️ Free tier de Render: el servicio "duerme" tras 15 min de inactividad.
-> El primer request lo "despierta" (3-5s). Los siguientes son instantáneos.
+> El primer request lo "despierta" (~5s). Los siguientes son instantáneos.
 
-## 2. Frontend en GitHub Pages (2 min)
+## 2. Frontend en GitHub Pages
 
-1. Ve a https://github.com/rladron-rodia/landing_contacto/settings/pages
-2. **Source**: `Deploy from a branch`
-3. **Branch**: `main` / **Folder**: `/ (root)`
-4. Pulsa **Save**.
-5. Espera 1-2 min — la URL final es:
+1. https://github.com/rladron-rodia/landing_contacto/settings/pages
+2. **Source**: `Deploy from a branch` → **Branch**: `main` / `/ (root)` → **Save**
+3. URL final: `https://rladron-rodia.github.io/landing_contacto/`
 
-   **https://rladron-rodia.github.io/landing_contacto/**
+GitHub Pages se actualiza automáticamente en cada push a `main` (~1-2 min).
 
-El JS del formulario detecta automáticamente que está en un dominio
-distinto a `localhost` y enruta los envíos a la URL pública del backend.
+## 3. Probar el formulario
 
-## 3. Probar el formulario en producción
+1. Abre la landing en producción
+2. Llena y envía el formulario
+3. Verifica:
+   - ✅ Mensaje verde "¡Gracias!..."
+   - ✅ Correo en tu inbox de Resend
+   - ✅ Registro nuevo en la tabla `contacts` (visible en el admin)
+   - ✅ Envío visible en https://resend.com/emails
 
-Abre https://rladron-rodia.github.io/landing_contacto/, llena el formulario
-y pulsa **Enviar Solicitud**.
+## 4. Acceso al admin
 
-- ✅ Mensaje verde "¡Gracias! Tu solicitud fue enviada correctamente."
-- ✅ Llega el correo a `rodrigo.ladron@monou.gg`
-- ✅ Si abres la consola del navegador (F12) ves un POST 200 a la URL de Render
+`https://rladron-rodia.github.io/landing_contacto/admin/` → pega `ADMIN_TOKEN`.
 
-## 4. Solución de problemas
+Pestañas disponibles:
+- **Contactos** — envíos del formulario
+- **Estadísticas** — cifras del hero
+- **Juegos F2P** — carrusel principal
+- **Juegos Publishers** — sección AAA
+- **Configuración URLs** — CTAs, footer links, dataset badge
+- **Formatos & Entrega** — Data Formats / Delivery Methods
+- **Bloques Info** — Visual Capture / Available Metadata / Current Volume
+
+## 5. Solución de problemas
 
 | Síntoma | Diagnóstico |
 |---|---|
-| "Failed to fetch" en consola | El backend de Render está dormido — espera 5s y reintenta |
-| 500 "Autenticación SMTP fallida" | App Password mal pegada en Render — edítala en *Environment* del servicio |
-| 403 / CORS | En Render, en *Environment*, confirma `ALLOWED_ORIGIN=*` (o pon tu dominio exacto) |
-| El formulario sigue abriendo Outlook | Tu navegador tiene cacheado el HTML antiguo — Cmd+Shift+R |
+| "Failed to fetch" en consola | Cold start de Render (5-10s) — espera y reintenta |
+| 401 Resend en logs | API key mal pegada en `RESEND_API_KEY` |
+| 422 Resend "you can only send to..." | Plan free + email destino no registrado en Resend |
+| 401 unauthorized en /api/contacts | `ADMIN_TOKEN` no coincide con el que pasas en el header |
+| "Failed to fetch" tras editar `render.yaml` | Aplicar Blueprint sync en el dashboard de Render |
 
-## 5. Hardening en producción
+## 6. Hardening producción
 
-Cuando esté todo funcionando, restringe el CORS:
+Cuando todo esté funcionando, restringe CORS:
 
-En Render → tu servicio → **Environment** → `ALLOWED_ORIGIN`:
+```yaml
+# render.yaml o Render → Environment
+ALLOWED_ORIGIN: https://rladron-rodia.github.io,https://monou.gg
 ```
-https://rladron-rodia.github.io,https://monou.gg,https://www.monou.gg
-```
 
-Y considera añadir reCAPTCHA o rate-limiting si recibes spam.
+Y considera:
+- Verificar dominio `monou.gg` en Resend (mejor entregabilidad + remitente propio)
+- Activar reCAPTCHA si recibes spam (no implementado, fácil de añadir)
+- Rotar `ADMIN_TOKEN` cada 90 días
