@@ -516,6 +516,90 @@ def admin_delete_info_column(slug):
     return jsonify({"ok": True}), 200
 
 
+# ---------------------------------------------------------------------------
+# v2.2.0 — Analytics config (GA4 + GTM) y CTA tags
+# ---------------------------------------------------------------------------
+
+@app.route("/api/analytics-config", methods=["GET"])
+def get_analytics_config_public():
+    """Config pública para que el loader del cliente sepa qué cargar.
+    Solo retorna lo necesario para el frontend (NO retorna metadata sensible)."""
+    cfg = db.get_analytics_config()
+    return jsonify({
+        "ok": True,
+        "config": {
+            "ga4_measurement_id": cfg.get("ga4_measurement_id") if cfg.get("ga4_enabled") else None,
+            "ga4_enabled":        bool(cfg.get("ga4_enabled")),
+            "gtm_container_id":   cfg.get("gtm_container_id") if cfg.get("gtm_enabled") else None,
+            "gtm_enabled":        bool(cfg.get("gtm_enabled")),
+        },
+    }), 200
+
+
+@app.route("/api/admin/analytics-config", methods=["GET"])
+def admin_get_analytics_config():
+    if not _is_admin(request):
+        return _unauthorized()
+    return jsonify({"ok": True, "config": db.get_analytics_config()}), 200
+
+
+@app.route("/api/admin/analytics-config", methods=["POST"])
+def admin_upsert_analytics_config():
+    if not _is_admin(request):
+        return _unauthorized()
+    data = request.get_json(silent=True) or {}
+    try:
+        row = db.upsert_analytics_config(data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Error guardando analytics_config")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    return jsonify({"ok": True, "config": row}), 200
+
+
+@app.route("/api/cta-tags", methods=["GET"])
+def get_cta_tags():
+    """Lista pública de CTA tags activos para que el loader los bindee."""
+    return jsonify({"ok": True, "tags": db.list_cta_tags(include_meta=False, only_enabled=True)}), 200
+
+
+@app.route("/api/admin/cta-tags", methods=["GET"])
+def admin_list_cta_tags():
+    if not _is_admin(request):
+        return _unauthorized()
+    return jsonify({"ok": True, "tags": db.list_cta_tags(include_meta=True, only_enabled=False)}), 200
+
+
+@app.route("/api/admin/cta-tags", methods=["POST"])
+def admin_upsert_cta_tag():
+    if not _is_admin(request):
+        return _unauthorized()
+    data = request.get_json(silent=True) or {}
+    try:
+        row = db.upsert_cta_tag(data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Error guardando cta_tag")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    return jsonify({"ok": True, "tag": row}), 200
+
+
+@app.route("/api/admin/cta-tags/<cta_key>", methods=["DELETE"])
+def admin_delete_cta_tag(cta_key):
+    if not _is_admin(request):
+        return _unauthorized()
+    try:
+        deleted = db.delete_cta_tag(cta_key)
+    except Exception as exc:
+        app.logger.exception("Error borrando cta_tag")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    if not deleted:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True}), 200
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
