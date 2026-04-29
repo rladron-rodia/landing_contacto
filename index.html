@@ -7,12 +7,11 @@
     <meta name="description" content="+10K horas de gameplay capturado, curado y etiquetado. Datasets para Reinforcement Learning, Behavior Cloning y World Models. Juegos F2P y AAA. Entrega vía S3 o API REST.">
     <meta name="robots" content="index, follow">
     <meta name="author" content="Monou Labs">
-    <meta name="keywords" content="dataset gameplay para IA, gameplay dataset for AI, reinforcement learning dataset, behavior cloning dataset, world model training data, datos entrenamiento IA, telemetria gameplay, video game AI dataset">
     <link rel="canonical" href="https://rladron-rodia.github.io/landing_contacto/">
 
-    <!-- ═══ Hreflang bilingüe (toggle ES/EN dinámico en la misma URL) ═══ -->
+    <!-- ═══ Hreflang — solo ES indexable. Toggle EN sigue activo como UX feature (data-en + JS),
+         pero no se declara como URL alternativa porque sirve HTML idéntico al ES (Audit v3 Opción B). ═══ -->
     <link rel="alternate" hreflang="es" href="https://rladron-rodia.github.io/landing_contacto/">
-    <link rel="alternate" hreflang="en" href="https://rladron-rodia.github.io/landing_contacto/?lang=en">
     <link rel="alternate" hreflang="x-default" href="https://rladron-rodia.github.io/landing_contacto/">
 
     <!-- ═══ Open Graph (LinkedIn, Slack, Facebook) ═══ -->
@@ -83,8 +82,8 @@
         "email": "contacto@monoulabs.ai"
       },
       "distribution": [
-        { "@type": "DataDownload", "encodingFormat": "JSON/JSONL", "contentUrl": "https://rladron-rodia.github.io/landing_contacto/" },
-        { "@type": "DataDownload", "encodingFormat": "API REST", "contentUrl": "https://rladron-rodia.github.io/landing_contacto/" }
+        { "@type": "DataDownload", "encodingFormat": "JSON/JSONL", "contentUrl": "https://rladron-rodia.github.io/landing_contacto/#contacto" },
+        { "@type": "DataDownload", "encodingFormat": "API REST", "contentUrl": "https://rladron-rodia.github.io/landing_contacto/#contacto" }
       ],
       "measurementTechnique": "Automated gameplay recording, annotation and segmentation",
       "variableMeasured": "Player actions, game states, rewards, visual frames",
@@ -157,15 +156,12 @@
     </script>
 
     <!-- ═══ CSS / fonts / scripts externos ═══ -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- FontAwesome CSS webfont (única implementación — el JS dual fue removido en v2.1.4) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Tailwind CDN (interim — TODO v2.2.0: self-host con CLI standalone). NO defer: causa FOUC porque Tailwind compila en runtime escaneando el DOM. -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
-    <script>
-      window.FontAwesomeConfig = {
-        autoReplaceSvg: 'nest'
-      };
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- Inter — solo 3 weights efectivos (400 body, 600 medium-bold, 700 headings) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme:
@@ -446,6 +442,8 @@
   </head>
 
   <body class="min-h-screen w-full flex flex-col relative text-gray-300 antialiased selection:bg-brand-500/30 selection:text-white m-0 p-0">
+    <!-- Skip-to-content link (WCAG 2.1 AA) — solo visible al recibir foco con teclado -->
+    <a href="#main" data-es="Saltar al contenido principal" data-en="Skip to main content" class="skip-link">Saltar al contenido principal</a>
     <div class="fixed inset-0 z-0 bg-grid-pattern grid-bg pointer-events-none">
     </div>
     <div class="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-accent-cyan/10 blur-[120px] rounded-full pointer-events-none z-0">
@@ -1224,10 +1222,10 @@
 
 <!-- Override opcional de la URL del backend (déjalo comentado en prod):
          <meta name="api-base" content="https://otro-backend.com"> -->
-    <script src="server/contact-form.js" defer></script>
-    <script src="server/stats-loader.js" defer></script>
-    <script src="server/games-loader.js" defer></script>
-    <script src="server/links-loader.js" defer></script>
-    <script src="server/delivery-loader.js" defer></script>
-    <script src="server/info-columns-loader.js" defer></script>
+    <script src="assets/js/contact-form.js" defer></script>
+    <script src="assets/js/stats-loader.js" defer></script>
+    <script src="assets/js/games-loader.js" defer></script>
+    <script src="assets/js/links-loader.js" defer></script>
+    <script src="assets/js/delivery-loader.js" defer></script>
+    <script src="assets/js/info-columns-loader.js" defer></script>
   </body></html>

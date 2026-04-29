@@ -1,12 +1,11 @@
 # robots.txt — Monou Labs landing_contacto
-# Última actualización: 2026-04-28
+# Última actualización: 2026-04-29
 
 User-agent: *
 Allow: /
+Disallow: /server/    # backend Python (app.py, db.py, .env). El JS de cliente vive en /assets/js/
 Disallow: /admin/
-Disallow: /server/
 Disallow: /.git/
-Disallow: /*?*
 
 # Permitir crawlers de IA / dataset search
 User-agent: Googlebot
@@ -15,7 +14,7 @@ Allow: /
 User-agent: Bingbot
 Allow: /
 
-# Bloquear bots de scraping agresivos conocidos
+# Throttling de bots SEO de scraping agresivo
 User-agent: AhrefsBot
 Crawl-delay: 10
 
