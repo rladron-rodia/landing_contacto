@@ -88,6 +88,18 @@ CREATE TABLE IF NOT EXISTS delivery_options (
     display_order  INT NOT NULL DEFAULT 0,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS info_columns (
+    slug           TEXT PRIMARY KEY,
+    title_es       TEXT,
+    title_en       TEXT,
+    icon           TEXT,                   -- 'fa-solid fa-video'
+    icon_color     TEXT,                   -- 'text-accent-cyan'
+    items_es       TEXT[] NOT NULL DEFAULT '{}',
+    items_en       TEXT[] NOT NULL DEFAULT '{}',
+    display_order  INT NOT NULL DEFAULT 0,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
 # Migraciones idempotentes que se ejecutan al boot. ALTER TABLE IF NOT EXISTS
@@ -234,6 +246,38 @@ DELIVERY_OPTIONS_SEED = [
      "fa-solid fa-plug", "text-accent-cyan", 2),
 ]
 
+# Datos iniciales de info_columns (las 3 columnas dentro del card grande de
+# la sección Publishers: Visual Capture, Available Metadata, Current Volume).
+# Tuple: (slug, title_es, title_en, icon, icon_color, items_es, items_en, display_order)
+INFO_COLUMNS_SEED = [
+    ("visual_capture",
+     "Captura Visual", "Visual Capture",
+     "fa-solid fa-video", "text-accent-cyan",
+     ["Resolución hasta 1080p @ 60fps"],
+     ["Resolution up to 1080p @ 60fps"],
+     1),
+    ("available_metadata",
+     "Metadata Disponible", "Available Metadata",
+     "fa-solid fa-tags", "text-accent-purple",
+     ["Eventos de gameplay detectados",
+      "Timestamps de acciones clave",
+      "Segmentación por partidas"],
+     ["Detected gameplay events",
+      "Key action timestamps",
+      "Match segmentation"],
+     2),
+    ("current_volume",
+     "Volumen Actual", "Current Volume",
+     "fa-solid fa-chart-bar", "text-brand-400",
+     ["2.8M videos indexados",
+      "3.1K horas de captura total",
+      "Actualización semanal"],
+     ["2.8M indexed videos",
+      "3.1K hours of total capture",
+      "Weekly update"],
+     3),
+]
+
 
 def is_enabled() -> bool:
     return bool(DATABASE_URL)
@@ -310,8 +354,17 @@ def init_schema() -> None:
                 DELIVERY_OPTIONS_SEED,
             )
             delivery_inserted = cur.rowcount
-            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d, delivery: %d",
-                     stats_inserted, games_inserted, links_inserted, delivery_inserted)
+            # Seed info_columns (idempotente)
+            cur.executemany(
+                """INSERT INTO info_columns (slug, title_es, title_en, icon, icon_color,
+                                              items_es, items_en, display_order)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (slug) DO NOTHING""",
+                INFO_COLUMNS_SEED,
+            )
+            info_inserted = cur.rowcount
+            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d, delivery: %d, info: %d",
+                     stats_inserted, games_inserted, links_inserted, delivery_inserted, info_inserted)
     except Exception:
         log.exception("[db] error inicializando schema")
 
@@ -764,4 +817,95 @@ def delete_delivery_option(slug: str) -> bool:
         raise RuntimeError("DB no está habilitada")
     with conn() as c, c.cursor() as cur:
         cur.execute("DELETE FROM delivery_options WHERE slug = %s", (slug,))
+        return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Info columns CRUD
+# ---------------------------------------------------------------------------
+
+def list_info_columns(include_meta: bool = False) -> list:
+    """Lista todas las columnas de info ordenadas por display_order. Fallback
+    al seed en memoria si la DB no está disponible."""
+    if not is_enabled():
+        return [
+            {"slug": s, "title_es": tes_, "title_en": ten_, "icon": ic,
+             "icon_color": col, "items_es": list(ies), "items_en": list(ien),
+             "display_order": ord_}
+            for (s, tes_, ten_, ic, col, ies, ien, ord_) in INFO_COLUMNS_SEED
+        ]
+    cols = ("slug, title_es, title_en, icon, icon_color, items_es, items_en, display_order")
+    if include_meta:
+        cols += ", updated_at"
+    with conn() as c, c.cursor() as cur:
+        cur.execute(f"SELECT {cols} FROM info_columns ORDER BY display_order, slug")
+        rows = cur.fetchall()
+        if include_meta:
+            for r in rows:
+                if r.get("updated_at"):
+                    r["updated_at"] = r["updated_at"].isoformat()
+        return rows
+
+
+def upsert_info_column(payload: dict) -> dict:
+    """Crea o actualiza una columna de info por slug."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    slug = (payload.get("slug") or "").strip()
+    if not slug:
+        raise ValueError("slug requerido")
+
+    title_es = (payload.get("title_es") or "").strip() or None
+    title_en = (payload.get("title_en") or "").strip() or None
+    icon       = (payload.get("icon") or "").strip() or None
+    icon_color = (payload.get("icon_color") or "").strip() or None
+
+    def _items(v):
+        if v is None: return []
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip()]
+        if isinstance(v, str):
+            # Aceptamos newlines o lineas literales
+            return [s.strip() for s in v.splitlines() if s.strip()]
+        return []
+
+    items_es = _items(payload.get("items_es"))
+    items_en = _items(payload.get("items_en"))
+    try:
+        display_order = int(payload.get("display_order") or 0)
+    except (TypeError, ValueError):
+        display_order = 0
+
+    with conn() as c, c.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO info_columns (slug, title_es, title_en, icon, icon_color,
+                                       items_es, items_en, display_order, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (slug) DO UPDATE SET
+                title_es = EXCLUDED.title_es,
+                title_en = EXCLUDED.title_en,
+                icon = EXCLUDED.icon,
+                icon_color = EXCLUDED.icon_color,
+                items_es = EXCLUDED.items_es,
+                items_en = EXCLUDED.items_en,
+                display_order = EXCLUDED.display_order,
+                updated_at = NOW()
+            RETURNING slug, title_es, title_en, icon, icon_color,
+                      items_es, items_en, display_order, updated_at
+            """,
+            (slug, title_es, title_en, icon, icon_color, items_es, items_en, display_order),
+        )
+        row = cur.fetchone()
+        if row and row.get("updated_at"):
+            row["updated_at"] = row["updated_at"].isoformat()
+        return row
+
+
+def delete_info_column(slug: str) -> bool:
+    """Borra una columna de info por slug."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    with conn() as c, c.cursor() as cur:
+        cur.execute("DELETE FROM info_columns WHERE slug = %s", (slug,))
         return cur.rowcount > 0

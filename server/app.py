@@ -470,6 +470,52 @@ def admin_delete_delivery_option(slug):
     return jsonify({"ok": True}), 200
 
 
+# ---------------------------------------------------------------------------
+# Info columns (Visual Capture / Available Metadata / Current Volume)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/info-columns", methods=["GET"])
+def get_info_columns():
+    """Lista las columnas info para la landing. Público."""
+    return jsonify({"ok": True, "columns": db.list_info_columns(include_meta=False)}), 200
+
+
+@app.route("/api/admin/info-columns", methods=["GET"])
+def admin_list_info_columns():
+    if not _is_admin(request):
+        return _unauthorized()
+    return jsonify({"ok": True, "columns": db.list_info_columns(include_meta=True)}), 200
+
+
+@app.route("/api/admin/info-columns", methods=["POST"])
+def admin_upsert_info_column():
+    if not _is_admin(request):
+        return _unauthorized()
+    data = request.get_json(silent=True) or {}
+    try:
+        row = db.upsert_info_column(data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Error guardando info_column")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    return jsonify({"ok": True, "column": row}), 200
+
+
+@app.route("/api/admin/info-columns/<slug>", methods=["DELETE"])
+def admin_delete_info_column(slug):
+    if not _is_admin(request):
+        return _unauthorized()
+    try:
+        deleted = db.delete_info_column(slug)
+    except Exception as exc:
+        app.logger.exception("Error borrando info_column")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    if not deleted:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True}), 200
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
