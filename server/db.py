@@ -216,6 +216,18 @@ SITE_LINKS_SEED = [
      "",            # sin imagen
      "Ver ejemplos", "View examples",
      2),
+    ("privacy_terms",
+     "Enlace del footer 'Términos de Privacidad' / 'Privacy Terms'. URL del documento de privacidad.",
+     "",  # url se configura desde el admin (default '#' inactivo)
+     "",
+     "Términos de Privacidad", "Privacy Terms",
+     10),
+    ("data_licenses",
+     "Enlace del footer 'Licencias de Datos' / 'Data Licenses'. URL del documento de licencias de datos.",
+     "",
+     "",
+     "Licencias de Datos", "Data Licenses",
+     11),
 ]
 
 # Datos iniciales de delivery_options (Data Formats + Delivery Methods).
