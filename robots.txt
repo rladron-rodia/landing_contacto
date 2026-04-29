@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /server/
+
+Sitemap: https://rladron-rodia.github.io/landing_contacto/sitemap.xml

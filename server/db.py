@@ -147,7 +147,7 @@ GAMES_SEED = [
      ["320K sesiones", "1080p"], ["320K sessions", "1080p"],
      "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png",
      "", "f2p", 3),
-    ("strategy",      "Estratégia",    "Estrategia",    "Strategy",
+    ("strategy",      "Estrategia",    "Estrategia",    "Strategy",
      "Decisiones tácticas, gestión de recursos",      "Tactical decisions, resource management",
      ["180K sesiones", "1080p"], ["180K sessions", "1080p"],
      "", "", "f2p", 4),
