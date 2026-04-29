@@ -421,6 +421,55 @@ def admin_delete_site_link(key):
     return jsonify({"ok": True}), 200
 
 
+# ---------------------------------------------------------------------------
+# Delivery options (Data Formats + Delivery Methods)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/delivery-options", methods=["GET"])
+def get_delivery_options():
+    """Lista las opciones de entrega para la landing. Público.
+    Acepta ?category=data_formats|delivery_methods (omitido = todas)."""
+    category = request.args.get("category")
+    return jsonify({"ok": True, "options": db.list_delivery_options(include_meta=False, category=category)}), 200
+
+
+@app.route("/api/admin/delivery-options", methods=["GET"])
+def admin_list_delivery_options():
+    if not _is_admin(request):
+        return _unauthorized()
+    category = request.args.get("category")
+    return jsonify({"ok": True, "options": db.list_delivery_options(include_meta=True, category=category)}), 200
+
+
+@app.route("/api/admin/delivery-options", methods=["POST"])
+def admin_upsert_delivery_option():
+    if not _is_admin(request):
+        return _unauthorized()
+    data = request.get_json(silent=True) or {}
+    try:
+        row = db.upsert_delivery_option(data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Error guardando delivery_option")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    return jsonify({"ok": True, "option": row}), 200
+
+
+@app.route("/api/admin/delivery-options/<slug>", methods=["DELETE"])
+def admin_delete_delivery_option(slug):
+    if not _is_admin(request):
+        return _unauthorized()
+    try:
+        deleted = db.delete_delivery_option(slug)
+    except Exception as exc:
+        app.logger.exception("Error borrando delivery_option")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    if not deleted:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True}), 200
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
