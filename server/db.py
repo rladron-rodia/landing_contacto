@@ -53,9 +53,13 @@ CREATE TABLE IF NOT EXISTS stats (
 # Para actualizar los valores LIVE, usa el admin en /admin/ → Estadísticas
 # (no este seed, que solo aplica cuando la tabla está recién creada).
 STATS_SEED = [
-    ("capture_hours",  "3.8K", "Horas de Captura Total", "Hours of Total Capture", 1),
-    ("indexed_videos", "2.2M", "Videos Indexados",       "Indexed Videos",         2),
-    ("games_covered",  "50+",  "Juegos Cubiertos",       "Games Covered",          3),
+    # Hero principal
+    ("capture_hours",     "10k+", "Horas de Captura",          "Capture Hours",            1),
+    ("indexed_videos",    "2.5M", "Videos Indexados",          "Indexed Videos",           2),
+    ("games_covered",     "50+",  "Juegos Cubiertos",          "Games Covered",            3),
+    # Sección "Publishers Games / Volumen Actual"
+    ("publishers_videos", "2.2M", "videos indexados",          "indexed videos",          10),
+    ("publishers_hours",  "3.8K", "horas de captura total",    "hours of total capture",  11),
 ]
 
 
@@ -78,25 +82,31 @@ def conn():
 
 
 def init_schema() -> None:
-    """Crea las tablas si no existen + siembra stats iniciales. Idempotente."""
+    """Crea las tablas si no existen + siembra stats faltantes. Idempotente.
+
+    El INSERT ... ON CONFLICT DO NOTHING garantiza que:
+      - Las stats nuevas que añades a STATS_SEED se inserten al boot
+      - Las stats existentes (con valores ya editados desde el admin) NO se
+        sobreescriban — el ON CONFLICT (key) las protege.
+
+    Si necesitas eliminar una stat de forma persistente, bórrala desde el
+    admin Y elimina su entrada de STATS_SEED para que no la re-cree el
+    siguiente deploy.
+    """
     if not is_enabled():
         log.info("[db] DATABASE_URL no definida — Postgres deshabilitado")
         return
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(SCHEMA_SQL)
-            # Seed stats solo si la tabla está vacía
-            cur.execute("SELECT COUNT(*) AS n FROM stats")
-            row = cur.fetchone()
-            if row and row.get("n", 0) == 0:
-                cur.executemany(
-                    """INSERT INTO stats (key, value, label_es, label_en, display_order)
-                       VALUES (%s, %s, %s, %s, %s)
-                       ON CONFLICT (key) DO NOTHING""",
-                    STATS_SEED,
-                )
-                log.info("[db] stats sembradas con %d filas", len(STATS_SEED))
-        log.info("[db] schema OK")
+            cur.executemany(
+                """INSERT INTO stats (key, value, label_es, label_en, display_order)
+                   VALUES (%s, %s, %s, %s, %s)
+                   ON CONFLICT (key) DO NOTHING""",
+                STATS_SEED,
+            )
+            inserted = cur.rowcount  # filas realmente añadidas (0 si todas ya existían)
+            log.info("[db] schema OK — stats nuevas insertadas: %d", inserted)
     except Exception:
         log.exception("[db] error inicializando schema")
 
