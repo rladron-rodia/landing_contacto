@@ -33,12 +33,14 @@
     <meta name="twitter:description" content="+10K hours of curated gameplay data for training AI agents. Datasets for RL, Behavior Cloning, World Models.">
     <meta name="twitter:image" content="https://rladron-rodia.github.io/landing_contacto/og-preview.png">
 
-    <!-- ═══ Performance hints — preconnect a CDN/S3 + Google Fonts ═══ -->
-    <link rel="preconnect" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
+    <!-- ═══ Performance hints (v2.1.5) — preconnect con crossorigin (PageSpeed) ═══ -->
+    <link rel="preconnect" href="https://muestra-imagen.s3.us-east-1.amazonaws.com" crossorigin>
+    <link rel="preconnect" href="https://landing-contacto-backend.onrender.com" crossorigin>
     <link rel="dns-prefetch" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
+    <link rel="dns-prefetch" href="https://landing-contacto-backend.onrender.com">
+    <!-- Inter font (woff2 self-host pendiente para v2.1.6) — preload el woff2 de Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="dns-prefetch" href="https://landing-contacto-backend.onrender.com">
 
     <!-- ═══ Theme & mobile hints ═══ -->
     <meta name="theme-color" content="#0B0E14">
@@ -155,58 +157,35 @@
     }
     </script>
 
-    <!-- ═══ CSS / fonts / scripts externos ═══ -->
-    <!-- FontAwesome CSS webfont (única implementación — el JS dual fue removido en v2.1.4) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <!-- Tailwind CDN (interim — TODO v2.2.0: self-host con CLI standalone). NO defer: causa FOUC porque Tailwind compila en runtime escaneando el DOM. -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ═══ CSS / fonts / scripts (v2.1.5 — self-host: Tailwind compilado y FontAwesome subset) ═══ -->
+    <!-- Tailwind compilado estático (25 KB vs 400 KB del CDN). Generado con tailwindcss CLI escaneando index.html + assets/js/*.js. Para regenerar tras cambios: ver scripts/build-tailwind.sh -->
+    <link rel="stylesheet" href="assets/css/tailwind.min.css">
+    <!-- FontAwesome 6.5.2 subset self-hosted (16 KB vs 100 KB) — solo los ~33 iconos usados, font-display:swap, woff2 en assets/fonts/ -->
+    <link rel="stylesheet" href="assets/css/fa-subset.min.css">
+    <!-- Preload del woff2 de FA Solid (es el más usado, evita FOIT en iconos críticos) -->
+    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/fa-solid-900.woff2" crossorigin>
     <!-- Inter — solo 3 weights efectivos (400 body, 600 medium-bold, 700 headings) -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet">
+    <!-- v2.1.5: la config de Tailwind ya está compilada estáticamente en assets/css/tailwind.min.css.
+         Este bloque solo aplica si alguien re-introduce el CDN de Tailwind (dev) — guard contra ReferenceError. -->
     <script>
-      tailwind.config = {
-        theme:
-        {
-          extend:
-          {
-            fontFamily:
-            {
-              sans: ['Inter', 'sans-serif']
-            },
-            colors:
-            {
-              brand:
-              {
-                50: '#f0fdfa',
-                100: '#ccfbf1',
-                200: '#99f6e4',
-                300: '#5eead4',
-                400: '#2dd4bf',
-                500: '#14b8a6',
-                600: '#0d9488',
-                700: '#0f766e',
-                800: '#115e59',
-                900: '#134e4a',
-                950: '#042f2e',
+      if (typeof tailwind !== 'undefined') {
+        tailwind.config = {
+          theme: {
+            extend: {
+              fontFamily: { sans: ['Inter', 'sans-serif'] },
+              colors: {
+                brand: { 50:'#f0fdfa',100:'#ccfbf1',200:'#99f6e4',300:'#5eead4',400:'#2dd4bf',500:'#14b8a6',600:'#0d9488',700:'#0f766e',800:'#115e59',900:'#134e4a',950:'#042f2e' },
+                dark:  { 900:'#0B0E14', 800:'#151A23', 700:'#1F2937' },
+                accent:{ purple:'#A855F7', cyan:'#22D3EE' }
               },
-              dark:
-              {
-                900: '#0B0E14',
-                800: '#151A23',
-                700: '#1F2937'
-              },
-              accent:
-              {
-                purple: '#A855F7',
-                cyan: '#22D3EE'
+              backgroundImage: {
+                'grid-pattern': "linear-gradient(to right, #1F2937 1px, transparent 1px), linear-gradient(to bottom, #1F2937 1px, transparent 1px)",
+                'radial-glow': 'radial-gradient(circle at center, rgba(34, 211, 238, 0.15) 0%, rgba(11, 14, 20, 0) 70%)'
               }
-            },
-            backgroundImage:
-            {
-              'grid-pattern': "linear-gradient(to right, #1F2937 1px, transparent 1px), linear-gradient(to bottom, #1F2937 1px, transparent 1px)",
-              'radial-glow': 'radial-gradient(circle at center, rgba(34, 211, 238, 0.15) 0%, rgba(11, 14, 20, 0) 70%)',
             }
           }
-        }
+        };
       }
     </script>
     <style>
