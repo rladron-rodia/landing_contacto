@@ -75,6 +75,10 @@
                 class="nav-btn w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
           <i class="fa-solid fa-gamepad w-4"></i> Juegos F2P
         </button>
+        <button data-view="publishers"
+                class="nav-btn w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
+          <i class="fa-solid fa-trophy w-4"></i> Juegos Publishers
+        </button>
       </nav>
       <div class="p-3 border-t border-white/10">
         <button id="logout-btn"
@@ -196,7 +200,7 @@
         </div>
       </section>
 
-      <!-- ─── Games view ─── -->
+      <!-- ─── Games view (F2P) ─── -->
       <section id="games-view" class="hidden">
         <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
           <div class="px-6 py-4 flex items-center gap-4">
@@ -241,6 +245,56 @@
                 </tr>
               </thead>
               <tbody id="games-tbody" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Publishers view ─── -->
+      <section id="publishers-view" class="hidden">
+        <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
+          <div class="px-6 py-4 flex items-center gap-4">
+            <i class="fa-solid fa-trophy text-brand-400"></i>
+            <h1 class="text-lg font-semibold">Juegos Publishers</h1>
+            <span id="publishers-count" class="text-xs bg-dark-900 px-2 py-1 rounded-full text-gray-400"></span>
+            <div class="ml-auto flex items-center gap-3">
+              <button id="publishers-refresh" title="Refrescar" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+              <button id="publishers-new" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> Nuevo
+              </button>
+            </div>
+          </div>
+          <div class="px-6 pb-4 text-xs text-gray-500">
+            Tarjetas de la sección "Juegos de Publishers" (AAA / populares). Para la card especial
+            <code>catalog</code> ("+40 Games"), el campo <strong>Link URL</strong> define a qué página
+            lleva al hacer clic.
+          </div>
+        </header>
+
+        <div class="p-6">
+          <div id="publishers-loading" class="text-center text-gray-400 py-12">
+            <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+          </div>
+          <div id="publishers-error" class="hidden text-center text-red-400 py-12">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+            <p id="publishers-error-msg" class="text-sm"></p>
+          </div>
+          <div id="publishers-table-wrap" class="hidden overflow-x-auto bg-dark-800 border border-white/10 rounded-2xl">
+            <table class="w-full text-sm">
+              <thead class="bg-dark-700/50 text-xs uppercase text-gray-400">
+                <tr>
+                  <th class="text-left px-4 py-3 w-16">Orden</th>
+                  <th class="text-left px-4 py-3 w-20">Imagen</th>
+                  <th class="text-left px-4 py-3">Slug</th>
+                  <th class="text-left px-4 py-3">Título</th>
+                  <th class="text-left px-4 py-3">Descripción ES</th>
+                  <th class="text-left px-4 py-3">Link URL</th>
+                  <th class="text-right px-4 py-3 w-24">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="publishers-tbody" class="divide-y divide-white/5"></tbody>
             </table>
           </div>
         </div>
@@ -355,6 +409,13 @@
                  class="w-32 aspect-video object-cover rounded-lg border border-white/10">
           </div>
         </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Link URL <span class="text-gray-600 normal-case">(opcional — hace la card clickable)</span></label>
+          <input id="game-link" name="link_url" type="url" placeholder="https://catalogo.monou.gg"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          <p class="text-gray-500 text-xs mt-1">Si llenas este campo, la card será clickable en la landing y abre esta URL en otra pestaña.</p>
+        </div>
+        <input type="hidden" id="game-category" name="category" value="f2p">
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-gray-400 text-xs uppercase mb-1">Descripción ES</label>

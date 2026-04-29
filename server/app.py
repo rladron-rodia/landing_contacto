@@ -326,16 +326,19 @@ def admin_delete_stat(key):
 
 @app.route("/api/games", methods=["GET"])
 def get_games():
-    """Devuelve la lista de juegos para la landing. Público, sin auth."""
-    return jsonify({"ok": True, "games": db.list_games(include_meta=False)}), 200
+    """Devuelve la lista de juegos para la landing. Público, sin auth.
+    Acepta ?category=f2p|publishers (omitido = todos)."""
+    category = request.args.get("category")
+    return jsonify({"ok": True, "games": db.list_games(include_meta=False, category=category)}), 200
 
 
 @app.route("/api/admin/games", methods=["GET"])
 def admin_list_games():
-    """Lista games con metadatos para el admin."""
+    """Lista games con metadatos para el admin. Acepta ?category=..."""
     if not _is_admin(request):
         return _unauthorized()
-    return jsonify({"ok": True, "games": db.list_games(include_meta=True)}), 200
+    category = request.args.get("category")
+    return jsonify({"ok": True, "games": db.list_games(include_meta=True, category=category)}), 200
 
 
 @app.route("/api/admin/games", methods=["POST"])

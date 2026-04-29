@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS games (
     tags_es        TEXT[] NOT NULL DEFAULT '{}',
     tags_en        TEXT[] NOT NULL DEFAULT '{}',
     image_url      TEXT,
+    link_url       TEXT,
+    category       TEXT NOT NULL DEFAULT 'f2p',
     display_order  INT NOT NULL DEFAULT 0,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -69,6 +71,8 @@ CREATE TABLE IF NOT EXISTS games (
 MIGRATIONS_SQL = """
 ALTER TABLE games ADD COLUMN IF NOT EXISTS title_es TEXT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS title_en TEXT;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS link_url TEXT;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'f2p';
 -- Backfill: si title_es está vacío en filas existentes, copiar desde title
 UPDATE games SET title_es = title WHERE title_es IS NULL AND title IS NOT NULL;
 UPDATE games SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL;
@@ -86,48 +90,78 @@ STATS_SEED = [
     ("publishers_hours",  "3.8K", "horas de captura total",    "hours of total capture",  11),
 ]
 
-# Datos iniciales de juegos del carrusel F2P. Mismo patrón:
-# se insertan automáticamente al deploy si no existen, no pisan ediciones.
-# Tuple: (slug, title, title_es, title_en, description_es, description_en,
-#         tags_es, tags_en, image_url, display_order)
-# `title` es el fallback cuando title_es/title_en están vacíos (legacy).
+# Datos iniciales de juegos. Tuple:
+# (slug, title, title_es, title_en, description_es, description_en,
+#  tags_es, tags_en, image_url, link_url, category, display_order)
 GAMES_SEED = [
+    # ── F2P (carrusel principal) ─────────────────────────────────────
     ("aventure",      "Aventure",      "Aventura",      "Adventure",
      "Combate en tiempo real, inventario, progresión", "Real-time combat, inventory, progression",
      ["250K sesiones", "1080p"], ["250K sessions", "1080p"],
-     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png", 1),
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png",
+     "", "f2p", 1),
     ("simulate",      "Simulate",      "Simulación",    "Simulate",
      "Aventura épica, sistema de misiones",           "Epic adventure, quest system",
      ["180K sesiones", "1080p"], ["180K sessions", "1080p"],
-     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png", 2),
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png",
+     "", "f2p", 2),
     ("puzzle",        "Puzzle",        "Puzzle",        "Puzzle",
      "Exploración de mazmorras, loot",                "Dungeon exploration, loot",
      ["320K sesiones", "1080p"], ["320K sessions", "1080p"],
-     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png", 3),
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png",
+     "", "f2p", 3),
     ("strategy",      "Estratégia",    "Estrategia",    "Strategy",
      "Decisiones tácticas, gestión de recursos",      "Tactical decisions, resource management",
      ["180K sesiones", "1080p"], ["180K sessions", "1080p"],
-     "", 4),
+     "", "", "f2p", 4),
     ("runner",        "Runner",        "Runner",        "Runner",
      "Construcción de imperios, diplomacia",          "Empire building, diplomacy",
      ["210K sesiones", "1080p"], ["210K sessions", "1080p"],
-     "", 5),
+     "", "", "f2p", 5),
     ("tower-defense", "Tower Defense", "Tower Defense", "Tower Defense",
      "Defensa estratégica, oleadas",                  "Strategic defense, waves",
      ["165K sesiones", "1080p"], ["165K sessions", "1080p"],
-     "", 6),
+     "", "", "f2p", 6),
     ("puzzle-arcade", "Puzzle Arcade", "Puzzle Arcade", "Puzzle Arcade",
      "Mecánicas clásicas, tiempo limitado",           "Classic mechanics, time-limited",
      ["280K sesiones", "1080p"], ["280K sessions", "1080p"],
-     "", 7),
+     "", "", "f2p", 7),
     ("logic-puzzles", "Logic Puzzles", "Puzzles de Lógica", "Logic Puzzles",
      "Lógica deductiva, razonamiento",                "Deductive logic, reasoning",
      ["140K sesiones", "1080p"], ["140K sessions", "1080p"],
-     "", 8),
+     "", "", "f2p", 8),
     ("block-puzzle",  "Block Puzzle",  "Puzzle de Bloques", "Block Puzzle",
      "Encaje de piezas, líneas",                      "Piece fitting, lines",
      ["230K sesiones", "1080p"], ["230K sessions", "1080p"],
-     "", 9),
+     "", "", "f2p", 9),
+    # ── Publishers (juegos AAA / populares) ─────────────────────────
+    ("minecraft",     "Minecraft",    "Minecraft",    "Minecraft",
+     "Mundo Abierto",                                 "Open World",
+     [], [],
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/minecraft.png",
+     "", "publishers", 1),
+    ("clash-royale",  "Clash Royale", "Clash Royale", "Clash Royale",
+     "Estrategia",                                    "Strategy",
+     [], [],
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/clashroyale.png",
+     "", "publishers", 2),
+    ("brawl-stars",   "Brawl Stars",  "Brawl Stars",  "Brawl Stars",
+     "MOBA",                                          "MOBA",
+     [], [],
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/brawlstar.png",
+     "", "publishers", 3),
+    ("roblox",        "Roblox",       "Roblox",       "Roblox",
+     "Mundo Abierto",                                 "Open World",
+     [], [],
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/roblox.png",
+     "", "publishers", 4),
+    # Card especial: catálogo de +40 juegos. Tiene link_url para hacerla clickable.
+    ("catalog",       "Catalogo",     "+40 Juegos",   "+40 Games",
+     "Catálogo Completo",                             "Complete Catalog",
+     [], [],
+     "",  # sin imagen — usa el icono "+" del HTML
+     "",  # link_url se setea desde el admin
+     "publishers", 99),
 ]
 
 
@@ -180,8 +214,9 @@ def init_schema() -> None:
             cur.executemany(
                 """INSERT INTO games (slug, title, title_es, title_en,
                                       description_es, description_en,
-                                      tags_es, tags_en, image_url, display_order)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                      tags_es, tags_en, image_url,
+                                      link_url, category, display_order)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (slug) DO NOTHING""",
                 GAMES_SEED,
             )
@@ -335,24 +370,35 @@ def delete_stat(key: str) -> bool:
 # Games CRUD (carrusel F2P)
 # ---------------------------------------------------------------------------
 
-def list_games(include_meta: bool = False) -> list:
-    """Lista todos los juegos ordenados por display_order. Fallback al seed
-    en memoria si la DB no está disponible."""
+def list_games(include_meta: bool = False, category: str = None) -> list:
+    """Lista juegos ordenados por display_order. Si `category` viene
+    ('f2p' | 'publishers') filtra a solo esos. Fallback al seed en memoria
+    si la DB no está disponible."""
     if not is_enabled():
-        return [
+        rows = [
             {"slug": s, "title": t, "title_es": tes_, "title_en": ten_,
              "description_es": de, "description_en": den,
              "tags_es": list(tags_es), "tags_en": list(tags_en),
-             "image_url": img, "display_order": ord_}
-            for (s, t, tes_, ten_, de, den, tags_es, tags_en, img, ord_) in GAMES_SEED
+             "image_url": img, "link_url": lnk, "category": cat,
+             "display_order": ord_}
+            for (s, t, tes_, ten_, de, den, tags_es, tags_en, img, lnk, cat, ord_) in GAMES_SEED
         ]
+        if category:
+            rows = [r for r in rows if r["category"] == category]
+        return rows
     cols = ("slug, title, title_es, title_en, "
             "description_es, description_en, "
-            "tags_es, tags_en, image_url, display_order")
+            "tags_es, tags_en, image_url, link_url, category, display_order")
     if include_meta:
         cols += ", updated_at"
     with conn() as c, c.cursor() as cur:
-        cur.execute(f"SELECT {cols} FROM games ORDER BY display_order, slug")
+        if category:
+            cur.execute(
+                f"SELECT {cols} FROM games WHERE category = %s ORDER BY display_order, slug",
+                (category,),
+            )
+        else:
+            cur.execute(f"SELECT {cols} FROM games ORDER BY category, display_order, slug")
         rows = cur.fetchall()
         if include_meta:
             for r in rows:
@@ -391,6 +437,10 @@ def upsert_game(payload: dict) -> dict:
     tags_es = _list(payload.get("tags_es"))
     tags_en = _list(payload.get("tags_en"))
     image_url = (payload.get("image_url") or "").strip() or None
+    link_url  = (payload.get("link_url")  or "").strip() or None
+    category = (payload.get("category") or "f2p").strip().lower()
+    if category not in ("f2p", "publishers"):
+        category = "f2p"
     try:
         display_order = int(payload.get("display_order") or 0)
     except (TypeError, ValueError):
@@ -401,8 +451,9 @@ def upsert_game(payload: dict) -> dict:
             """
             INSERT INTO games (slug, title, title_es, title_en,
                                description_es, description_en,
-                               tags_es, tags_en, image_url, display_order, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                               tags_es, tags_en, image_url, link_url,
+                               category, display_order, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (slug) DO UPDATE SET
                 title = EXCLUDED.title,
                 title_es = EXCLUDED.title_es,
@@ -412,14 +463,17 @@ def upsert_game(payload: dict) -> dict:
                 tags_es = EXCLUDED.tags_es,
                 tags_en = EXCLUDED.tags_en,
                 image_url = EXCLUDED.image_url,
+                link_url = EXCLUDED.link_url,
+                category = EXCLUDED.category,
                 display_order = EXCLUDED.display_order,
                 updated_at = NOW()
             RETURNING slug, title, title_es, title_en,
                       description_es, description_en,
-                      tags_es, tags_en, image_url, display_order, updated_at
+                      tags_es, tags_en, image_url, link_url,
+                      category, display_order, updated_at
             """,
             (slug, title, title_es, title_en, desc_es, desc_en,
-             tags_es, tags_en, image_url, display_order),
+             tags_es, tags_en, image_url, link_url, category, display_order),
         )
         row = cur.fetchone()
         if row and row.get("updated_at"):
