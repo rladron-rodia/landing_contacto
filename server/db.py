@@ -47,11 +47,22 @@ CREATE TABLE IF NOT EXISTS stats (
     display_order  INT NOT NULL DEFAULT 0,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS games (
+    slug           TEXT PRIMARY KEY,
+    title          TEXT NOT NULL,
+    description_es TEXT,
+    description_en TEXT,
+    tags_es        TEXT[] NOT NULL DEFAULT '{}',
+    tags_en        TEXT[] NOT NULL DEFAULT '{}',
+    image_url      TEXT,
+    display_order  INT NOT NULL DEFAULT 0,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
-# Datos iniciales de stats. Solo se insertan si la tabla está vacía.
-# Para actualizar los valores LIVE, usa el admin en /admin/ → Estadísticas
-# (no este seed, que solo aplica cuando la tabla está recién creada).
+# Datos iniciales de stats. Las claves nuevas se insertan en cada deploy
+# vía init_schema (ON CONFLICT DO NOTHING protege ediciones previas).
 STATS_SEED = [
     # Hero principal
     ("capture_hours",     "10k+", "Horas de Captura",          "Capture Hours",            1),
@@ -60,6 +71,39 @@ STATS_SEED = [
     # Sección "Publishers Games / Volumen Actual"
     ("publishers_videos", "2.2M", "videos indexados",          "indexed videos",          10),
     ("publishers_hours",  "3.8K", "horas de captura total",    "hours of total capture",  11),
+]
+
+# Datos iniciales de juegos del carrusel F2P. Mismo patrón:
+# se insertan automáticamente al deploy si no existen, no pisan ediciones.
+# Tuple: (slug, title, description_es, description_en, tags_es, tags_en, image_url, display_order)
+GAMES_SEED = [
+    ("aventure",      "Aventure",      "Combate en tiempo real, inventario, progresión", "Real-time combat, inventory, progression",
+     ["250K sesiones", "1080p"], ["250K sessions", "1080p"],
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png", 1),
+    ("simulate",      "Simulate",      "Aventura épica, sistema de misiones",           "Epic adventure, quest system",
+     ["180K sesiones", "1080p"], ["180K sessions", "1080p"],
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png", 2),
+    ("puzzle",        "Puzzle",        "Exploración de mazmorras, loot",                "Dungeon exploration, loot",
+     ["320K sesiones", "1080p"], ["320K sessions", "1080p"],
+     "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png", 3),
+    ("strategy",      "Estratégia",    "Decisiones tácticas, gestión de recursos",      "Tactical decisions, resource management",
+     ["180K sesiones", "1080p"], ["180K sessions", "1080p"],
+     "", 4),
+    ("runner",        "Runner",        "Construcción de imperios, diplomacia",          "Empire building, diplomacy",
+     ["210K sesiones", "1080p"], ["210K sessions", "1080p"],
+     "", 5),
+    ("tower-defense", "Tower Defense", "Defensa estratégica, oleadas",                  "Strategic defense, waves",
+     ["165K sesiones", "1080p"], ["165K sessions", "1080p"],
+     "", 6),
+    ("puzzle-arcade", "Puzzle Arcade", "Mecánicas clásicas, tiempo limitado",           "Classic mechanics, time-limited",
+     ["280K sesiones", "1080p"], ["280K sessions", "1080p"],
+     "", 7),
+    ("logic-puzzles", "Logic Puzzles", "Lógica deductiva, razonamiento",                "Deductive logic, reasoning",
+     ["140K sesiones", "1080p"], ["140K sessions", "1080p"],
+     "", 8),
+    ("block-puzzle",  "Block Puzzle",  "Encaje de piezas, líneas",                      "Piece fitting, lines",
+     ["230K sesiones", "1080p"], ["230K sessions", "1080p"],
+     "", 9),
 ]
 
 
@@ -99,14 +143,25 @@ def init_schema() -> None:
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(SCHEMA_SQL)
+            # Seed stats (idempotente)
             cur.executemany(
                 """INSERT INTO stats (key, value, label_es, label_en, display_order)
                    VALUES (%s, %s, %s, %s, %s)
                    ON CONFLICT (key) DO NOTHING""",
                 STATS_SEED,
             )
-            inserted = cur.rowcount  # filas realmente añadidas (0 si todas ya existían)
-            log.info("[db] schema OK — stats nuevas insertadas: %d", inserted)
+            stats_inserted = cur.rowcount
+            # Seed games (idempotente)
+            cur.executemany(
+                """INSERT INTO games (slug, title, description_es, description_en,
+                                      tags_es, tags_en, image_url, display_order)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (slug) DO NOTHING""",
+                GAMES_SEED,
+            )
+            games_inserted = cur.rowcount
+            log.info("[db] schema OK — stats nuevas: %d, games nuevos: %d",
+                     stats_inserted, games_inserted)
     except Exception:
         log.exception("[db] error inicializando schema")
 
@@ -247,4 +302,94 @@ def delete_stat(key: str) -> bool:
         raise RuntimeError("DB no está habilitada")
     with conn() as c, c.cursor() as cur:
         cur.execute("DELETE FROM stats WHERE key = %s", (key,))
+        return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Games CRUD (carrusel F2P)
+# ---------------------------------------------------------------------------
+
+def list_games(include_meta: bool = False) -> list:
+    """Lista todos los juegos ordenados por display_order. Fallback al seed
+    en memoria si la DB no está disponible."""
+    if not is_enabled():
+        return [
+            {"slug": s, "title": t, "description_es": de, "description_en": den,
+             "tags_es": list(tes), "tags_en": list(ten),
+             "image_url": img, "display_order": ord_}
+            for (s, t, de, den, tes, ten, img, ord_) in GAMES_SEED
+        ]
+    cols = ("slug, title, description_es, description_en, "
+            "tags_es, tags_en, image_url, display_order")
+    if include_meta:
+        cols += ", updated_at"
+    with conn() as c, c.cursor() as cur:
+        cur.execute(f"SELECT {cols} FROM games ORDER BY display_order, slug")
+        rows = cur.fetchall()
+        if include_meta:
+            for r in rows:
+                if r.get("updated_at"):
+                    r["updated_at"] = r["updated_at"].isoformat()
+        return rows
+
+
+def upsert_game(payload: dict) -> dict:
+    """Crea o actualiza un juego por slug."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    slug = (payload.get("slug") or "").strip()
+    if not slug:
+        raise ValueError("slug requerido")
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise ValueError("title requerido")
+
+    def _list(v):
+        if v is None: return []
+        if isinstance(v, list): return [str(x).strip() for x in v if str(x).strip()]
+        if isinstance(v, str):  return [s.strip() for s in v.split(",") if s.strip()]
+        return []
+
+    desc_es = (payload.get("description_es") or "").strip() or None
+    desc_en = (payload.get("description_en") or "").strip() or None
+    tags_es = _list(payload.get("tags_es"))
+    tags_en = _list(payload.get("tags_en"))
+    image_url = (payload.get("image_url") or "").strip() or None
+    try:
+        display_order = int(payload.get("display_order") or 0)
+    except (TypeError, ValueError):
+        display_order = 0
+
+    with conn() as c, c.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO games (slug, title, description_es, description_en,
+                               tags_es, tags_en, image_url, display_order, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (slug) DO UPDATE SET
+                title = EXCLUDED.title,
+                description_es = EXCLUDED.description_es,
+                description_en = EXCLUDED.description_en,
+                tags_es = EXCLUDED.tags_es,
+                tags_en = EXCLUDED.tags_en,
+                image_url = EXCLUDED.image_url,
+                display_order = EXCLUDED.display_order,
+                updated_at = NOW()
+            RETURNING slug, title, description_es, description_en,
+                      tags_es, tags_en, image_url, display_order, updated_at
+            """,
+            (slug, title, desc_es, desc_en, tags_es, tags_en, image_url, display_order),
+        )
+        row = cur.fetchone()
+        if row and row.get("updated_at"):
+            row["updated_at"] = row["updated_at"].isoformat()
+        return row
+
+
+def delete_game(slug: str) -> bool:
+    """Borra un juego por slug."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    with conn() as c, c.cursor() as cur:
+        cur.execute("DELETE FROM games WHERE slug = %s", (slug,))
         return cur.rowcount > 0

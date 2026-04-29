@@ -31,6 +31,7 @@
   // ---------- State ----------
   let allContacts = [];
   let allStats    = [];
+  let allGames    = [];
   let currentView = "contacts";
 
   // ---------- Token ----------
@@ -100,8 +101,10 @@
     });
     $("#contacts-view").classList.toggle("hidden", name !== "contacts");
     $("#stats-view").classList.toggle("hidden", name !== "stats");
+    $("#games-view").classList.toggle("hidden", name !== "games");
     if (name === "contacts") loadContacts();
     if (name === "stats")    loadStats();
+    if (name === "games")    loadGames();
   }
 
   // ============================================================
@@ -371,6 +374,147 @@
     }
   });
   $("#stat-form").addEventListener("submit", submitStatForm);
+
+  // ============================================================
+  //   GAMES (carrusel F2P)
+  // ============================================================
+
+  function renderGamesRows() {
+    $("#games-count").textContent = `${allGames.length}`;
+    if (!allGames.length) {
+      $("#games-tbody").innerHTML = `
+        <tr><td colspan="7" class="px-4 py-12 text-center text-gray-500">
+          No hay juegos. Pulsa <strong>Nuevo</strong> para crear el primero.
+        </td></tr>`;
+      $("#games-loading").classList.add("hidden");
+      $("#games-error").classList.add("hidden");
+      $("#games-table-wrap").classList.remove("hidden");
+      return;
+    }
+    $("#games-tbody").innerHTML = allGames.map(g => {
+      const tagsEs = (g.tags_es || []).join(", ");
+      const img = g.image_url
+        ? `<img src="${escapeHtml(g.image_url)}" alt="" class="w-12 h-8 object-cover rounded">`
+        : `<div class="w-12 h-8 bg-dark-900 rounded flex items-center justify-center"><i class="fa-solid fa-image text-gray-600 text-xs"></i></div>`;
+      return `
+        <tr class="hover:bg-white/5">
+          <td class="px-4 py-3 text-gray-500">${escapeHtml(g.display_order ?? 0)}</td>
+          <td class="px-4 py-3">${img}</td>
+          <td class="px-4 py-3 font-mono text-brand-400 text-xs">${escapeHtml(g.slug)}</td>
+          <td class="px-4 py-3 font-medium">${escapeHtml(g.title)}</td>
+          <td class="px-4 py-3 text-gray-300 max-w-xs truncate">${escapeHtml(g.description_es || "—")}</td>
+          <td class="px-4 py-3 text-xs text-gray-400">${escapeHtml(tagsEs || "—")}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button class="game-edit text-gray-400 hover:text-brand-400 p-2" data-slug="${escapeHtml(g.slug)}" title="Editar">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button class="game-delete text-gray-400 hover:text-red-400 p-2" data-slug="${escapeHtml(g.slug)}" title="Borrar">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+    }).join("");
+    $("#games-loading").classList.add("hidden");
+    $("#games-error").classList.add("hidden");
+    $("#games-table-wrap").classList.remove("hidden");
+  }
+
+  async function loadGames() {
+    $("#games-loading").classList.remove("hidden");
+    $("#games-error").classList.add("hidden");
+    $("#games-table-wrap").classList.add("hidden");
+    try {
+      const json = await api("GET", "/api/admin/games");
+      allGames = json.games || [];
+      renderGamesRows();
+    } catch (err) {
+      if (err.message === "Token inválido") return showLogin(err.message);
+      $("#games-error-msg").textContent = err.message;
+      $("#games-loading").classList.add("hidden");
+      $("#games-error").classList.remove("hidden");
+    }
+  }
+
+  function openGameModal(game) {
+    const isNew = !game;
+    $("#game-modal-title").textContent = isNew ? "Nuevo juego" : "Editar juego";
+    $("#game-form-error").classList.add("hidden");
+    $("#game-slug").value      = game ? game.slug : "";
+    $("#game-slug").disabled    = !isNew;
+    $("#game-title").value      = game ? game.title : "";
+    $("#game-image").value      = game ? (game.image_url || "") : "";
+    $("#game-desc-es").value    = game ? (game.description_es || "") : "";
+    $("#game-desc-en").value    = game ? (game.description_en || "") : "";
+    $("#game-tags-es").value    = game ? (game.tags_es || []).join(", ") : "";
+    $("#game-tags-en").value    = game ? (game.tags_en || []).join(", ") : "";
+    $("#game-order").value      = game ? (game.display_order ?? 0) : 0;
+    refreshGameImagePreview();
+    openModal("#game-modal");
+    setTimeout(() => $("#game-title").focus(), 0);
+  }
+
+  function refreshGameImagePreview() {
+    const url = $("#game-image").value.trim();
+    const wrap = $("#game-image-preview-wrap");
+    const img  = $("#game-image-preview");
+    if (url) {
+      img.src = url;
+      wrap.classList.remove("hidden");
+    } else {
+      wrap.classList.add("hidden");
+    }
+  }
+
+  async function submitGameForm(e) {
+    e.preventDefault();
+    $("#game-form-error").classList.add("hidden");
+    const payload = {
+      slug:           $("#game-slug").value.trim(),
+      title:          $("#game-title").value.trim(),
+      image_url:      $("#game-image").value.trim(),
+      description_es: $("#game-desc-es").value.trim(),
+      description_en: $("#game-desc-en").value.trim(),
+      tags_es:        $("#game-tags-es").value,
+      tags_en:        $("#game-tags-en").value,
+      display_order:  parseInt($("#game-order").value, 10) || 0,
+    };
+    try {
+      await api("POST", "/api/admin/games", payload);
+      closeAllModals();
+      try { localStorage.removeItem("monou_games_v1"); } catch (e) {}
+      loadGames();
+    } catch (err) {
+      $("#game-form-error").textContent = err.message;
+      $("#game-form-error").classList.remove("hidden");
+    }
+  }
+
+  async function deleteGame(slug) {
+    if (!confirm(`¿Borrar el juego "${slug}"? Esto NO borra la card del HTML, solo el registro en la DB.`)) return;
+    try {
+      await api("DELETE", `/api/admin/games/${encodeURIComponent(slug)}`);
+      try { localStorage.removeItem("monou_games_v1"); } catch (e) {}
+      loadGames();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
+  // Listeners de games
+  $("#games-refresh").addEventListener("click", loadGames);
+  $("#games-new").addEventListener("click", () => openGameModal(null));
+  $("#games-tbody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".game-edit");
+    const delBtn  = e.target.closest(".game-delete");
+    if (editBtn) {
+      const g = allGames.find(x => x.slug === editBtn.dataset.slug);
+      if (g) openGameModal(g);
+    } else if (delBtn) {
+      deleteGame(delBtn.dataset.slug);
+    }
+  });
+  $("#game-form").addEventListener("submit", submitGameForm);
+  $("#game-image").addEventListener("input", refreshGameImagePreview);
 
   // Modales
   $$(".modal-close").forEach(btn => btn.addEventListener("click", closeAllModals));

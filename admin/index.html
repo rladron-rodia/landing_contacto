@@ -71,6 +71,10 @@
                 class="nav-btn w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
           <i class="fa-solid fa-chart-simple w-4"></i> Estadísticas
         </button>
+        <button data-view="games"
+                class="nav-btn w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
+          <i class="fa-solid fa-gamepad w-4"></i> Juegos F2P
+        </button>
       </nav>
       <div class="p-3 border-t border-white/10">
         <button id="logout-btn"
@@ -192,6 +196,56 @@
         </div>
       </section>
 
+      <!-- ─── Games view ─── -->
+      <section id="games-view" class="hidden">
+        <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
+          <div class="px-6 py-4 flex items-center gap-4">
+            <i class="fa-solid fa-gamepad text-brand-400"></i>
+            <h1 class="text-lg font-semibold">Juegos F2P</h1>
+            <span id="games-count" class="text-xs bg-dark-900 px-2 py-1 rounded-full text-gray-400"></span>
+            <div class="ml-auto flex items-center gap-3">
+              <button id="games-refresh" title="Refrescar" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+              <button id="games-new" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> Nuevo
+              </button>
+            </div>
+          </div>
+          <div class="px-6 pb-4 text-xs text-gray-500">
+            Tarjetas del carrusel F2P de la landing. Edita el título, descripción, tags e imagen.
+            <strong class="text-gray-400">Nota:</strong> el <code>slug</code> debe coincidir con el atributo
+            <code>data-game-slug</code> de la tarjeta en el HTML.
+          </div>
+        </header>
+
+        <div class="p-6">
+          <div id="games-loading" class="text-center text-gray-400 py-12">
+            <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+          </div>
+          <div id="games-error" class="hidden text-center text-red-400 py-12">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+            <p id="games-error-msg" class="text-sm"></p>
+          </div>
+          <div id="games-table-wrap" class="hidden overflow-x-auto bg-dark-800 border border-white/10 rounded-2xl">
+            <table class="w-full text-sm">
+              <thead class="bg-dark-700/50 text-xs uppercase text-gray-400">
+                <tr>
+                  <th class="text-left px-4 py-3 w-16">Orden</th>
+                  <th class="text-left px-4 py-3 w-20">Imagen</th>
+                  <th class="text-left px-4 py-3">Slug</th>
+                  <th class="text-left px-4 py-3">Título</th>
+                  <th class="text-left px-4 py-3">Descripción ES</th>
+                  <th class="text-left px-4 py-3">Tags</th>
+                  <th class="text-right px-4 py-3 w-24">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="games-tbody" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -246,6 +300,80 @@
                  class="w-32 bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
         </div>
         <p id="stat-form-error" class="hidden text-red-400 text-xs"></p>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
+            Guardar
+          </button>
+          <button type="button" class="modal-close px-4 py-2.5 border border-white/10 rounded-lg hover:bg-white/5">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── Modal: editar/crear juego ───── -->
+  <div id="game-modal" class="hidden fixed inset-0 z-20 bg-black/70 flex items-center justify-center p-6">
+    <div class="bg-dark-800 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-white/10 flex items-center gap-3">
+        <i class="fa-solid fa-gamepad text-brand-400"></i>
+        <h2 id="game-modal-title" class="text-lg font-semibold">Editar juego</h2>
+        <button class="modal-close ml-auto text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <form id="game-form" class="p-6 space-y-4 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Slug (identificador)</label>
+            <input id="game-slug" name="slug" required pattern="[a-z0-9_\-]+" placeholder="aventure"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+            <p class="text-gray-500 text-xs mt-1">Coincide con <code>data-game-slug</code> en el HTML.</p>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Orden</label>
+            <input id="game-order" name="display_order" type="number" min="0" value="0"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Título</label>
+          <input id="game-title" name="title" required placeholder="Aventure"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">URL de la imagen</label>
+          <input id="game-image" name="image_url" type="url" placeholder="https://..."
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          <div class="mt-2 hidden" id="game-image-preview-wrap">
+            <img id="game-image-preview" alt="preview"
+                 class="w-32 aspect-video object-cover rounded-lg border border-white/10">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Descripción ES</label>
+            <textarea id="game-desc-es" name="description_es" rows="2"
+                      class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 resize-none"></textarea>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Descripción EN</label>
+            <textarea id="game-desc-en" name="description_en" rows="2"
+                      class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 resize-none"></textarea>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Tags ES (separadas por coma)</label>
+            <input id="game-tags-es" name="tags_es" placeholder="250K sesiones, 1080p"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Tags EN (separadas por coma)</label>
+            <input id="game-tags-en" name="tags_en" placeholder="250K sessions, 1080p"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+            <p class="text-gray-500 text-xs mt-1">Mismo número de items que ES (orden por orden).</p>
+          </div>
+        </div>
+        <p id="game-form-error" class="hidden text-red-400 text-xs"></p>
         <div class="flex gap-3 pt-2">
           <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
             Guardar

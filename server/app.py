@@ -320,6 +320,55 @@ def admin_delete_stat(key):
     return jsonify({"ok": True}), 200
 
 
+# ---------------------------------------------------------------------------
+# Games (carrusel F2P) — endpoint público y admin CRUD
+# ---------------------------------------------------------------------------
+
+@app.route("/api/games", methods=["GET"])
+def get_games():
+    """Devuelve la lista de juegos para la landing. Público, sin auth."""
+    return jsonify({"ok": True, "games": db.list_games(include_meta=False)}), 200
+
+
+@app.route("/api/admin/games", methods=["GET"])
+def admin_list_games():
+    """Lista games con metadatos para el admin."""
+    if not _is_admin(request):
+        return _unauthorized()
+    return jsonify({"ok": True, "games": db.list_games(include_meta=True)}), 200
+
+
+@app.route("/api/admin/games", methods=["POST"])
+def admin_upsert_game():
+    """Crea o actualiza un juego."""
+    if not _is_admin(request):
+        return _unauthorized()
+    data = request.get_json(silent=True) or {}
+    try:
+        row = db.upsert_game(data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Error guardando game")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    return jsonify({"ok": True, "game": row}), 200
+
+
+@app.route("/api/admin/games/<slug>", methods=["DELETE"])
+def admin_delete_game(slug):
+    """Borra un juego por slug."""
+    if not _is_admin(request):
+        return _unauthorized()
+    try:
+        deleted = db.delete_game(slug)
+    except Exception as exc:
+        app.logger.exception("Error borrando game")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    if not deleted:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True}), 200
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
