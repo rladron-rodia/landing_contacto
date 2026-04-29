@@ -1212,7 +1212,29 @@
   // Modales
   $$(".modal-close").forEach(btn => btn.addEventListener("click", closeAllModals));
   $$(".fixed.inset-0").forEach(m => {
-    m.addEventListener("click", (e) => { if (e.target === m) closeAllModals(); });
+    // Tracking de mousedown para evitar cerrar el modal cuando el usuario
+    // selecciona texto con drag dentro de un input/textarea y suelta el
+    // mouse FUERA del campo (el click resultante tiene target=backdrop
+    // pero no es intención de cerrar). Solo se cierra si AMBOS mousedown
+    // y click ocurrieron limpios sobre el backdrop.
+    let downOnBackdrop = false;
+    m.addEventListener("mousedown", (e) => {
+      downOnBackdrop = (e.target === m);
+    });
+    m.addEventListener("click", (e) => {
+      if (e.target === m && downOnBackdrop) closeAllModals();
+      downOnBackdrop = false;
+    });
+    // Right-click (context menu) en el backdrop NO debe cerrar
+    m.addEventListener("contextmenu", (e) => {
+      // Si el contextmenu es sobre un input/textarea/select, dejar pasar
+      // (el browser muestra Cortar/Copiar/Pegar nativos)
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) {
+        // No prevent default; permite que el menú nativo aparezca
+        return;
+      }
+    });
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAllModals(); });
 
