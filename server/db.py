@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS stats (
 CREATE TABLE IF NOT EXISTS games (
     slug           TEXT PRIMARY KEY,
     title          TEXT NOT NULL,
+    title_es       TEXT,
+    title_en       TEXT,
     description_es TEXT,
     description_en TEXT,
     tags_es        TEXT[] NOT NULL DEFAULT '{}',
@@ -59,6 +61,17 @@ CREATE TABLE IF NOT EXISTS games (
     display_order  INT NOT NULL DEFAULT 0,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+"""
+
+# Migraciones idempotentes que se ejecutan al boot. ALTER TABLE IF NOT EXISTS
+# es soportado en Postgres 9.6+; lo usamos para poder evolucionar el schema
+# sin tocar datos existentes.
+MIGRATIONS_SQL = """
+ALTER TABLE games ADD COLUMN IF NOT EXISTS title_es TEXT;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS title_en TEXT;
+-- Backfill: si title_es está vacío en filas existentes, copiar desde title
+UPDATE games SET title_es = title WHERE title_es IS NULL AND title IS NOT NULL;
+UPDATE games SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL;
 """
 
 # Datos iniciales de stats. Las claves nuevas se insertan en cada deploy
@@ -75,33 +88,44 @@ STATS_SEED = [
 
 # Datos iniciales de juegos del carrusel F2P. Mismo patrón:
 # se insertan automáticamente al deploy si no existen, no pisan ediciones.
-# Tuple: (slug, title, description_es, description_en, tags_es, tags_en, image_url, display_order)
+# Tuple: (slug, title, title_es, title_en, description_es, description_en,
+#         tags_es, tags_en, image_url, display_order)
+# `title` es el fallback cuando title_es/title_en están vacíos (legacy).
 GAMES_SEED = [
-    ("aventure",      "Aventure",      "Combate en tiempo real, inventario, progresión", "Real-time combat, inventory, progression",
+    ("aventure",      "Aventure",      "Aventura",      "Adventure",
+     "Combate en tiempo real, inventario, progresión", "Real-time combat, inventory, progression",
      ["250K sesiones", "1080p"], ["250K sessions", "1080p"],
      "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-attack.png", 1),
-    ("simulate",      "Simulate",      "Aventura épica, sistema de misiones",           "Epic adventure, quest system",
+    ("simulate",      "Simulate",      "Simulación",    "Simulate",
+     "Aventura épica, sistema de misiones",           "Epic adventure, quest system",
      ["180K sesiones", "1080p"], ["180K sessions", "1080p"],
      "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-pacman.png", 2),
-    ("puzzle",        "Puzzle",        "Exploración de mazmorras, loot",                "Dungeon exploration, loot",
+    ("puzzle",        "Puzzle",        "Puzzle",        "Puzzle",
+     "Exploración de mazmorras, loot",                "Dungeon exploration, loot",
      ["320K sesiones", "1080p"], ["320K sessions", "1080p"],
      "https://muestra-imagen.s3.us-east-1.amazonaws.com/monou-bird.png", 3),
-    ("strategy",      "Estratégia",    "Decisiones tácticas, gestión de recursos",      "Tactical decisions, resource management",
+    ("strategy",      "Estratégia",    "Estrategia",    "Strategy",
+     "Decisiones tácticas, gestión de recursos",      "Tactical decisions, resource management",
      ["180K sesiones", "1080p"], ["180K sessions", "1080p"],
      "", 4),
-    ("runner",        "Runner",        "Construcción de imperios, diplomacia",          "Empire building, diplomacy",
+    ("runner",        "Runner",        "Runner",        "Runner",
+     "Construcción de imperios, diplomacia",          "Empire building, diplomacy",
      ["210K sesiones", "1080p"], ["210K sessions", "1080p"],
      "", 5),
-    ("tower-defense", "Tower Defense", "Defensa estratégica, oleadas",                  "Strategic defense, waves",
+    ("tower-defense", "Tower Defense", "Tower Defense", "Tower Defense",
+     "Defensa estratégica, oleadas",                  "Strategic defense, waves",
      ["165K sesiones", "1080p"], ["165K sessions", "1080p"],
      "", 6),
-    ("puzzle-arcade", "Puzzle Arcade", "Mecánicas clásicas, tiempo limitado",           "Classic mechanics, time-limited",
+    ("puzzle-arcade", "Puzzle Arcade", "Puzzle Arcade", "Puzzle Arcade",
+     "Mecánicas clásicas, tiempo limitado",           "Classic mechanics, time-limited",
      ["280K sesiones", "1080p"], ["280K sessions", "1080p"],
      "", 7),
-    ("logic-puzzles", "Logic Puzzles", "Lógica deductiva, razonamiento",                "Deductive logic, reasoning",
+    ("logic-puzzles", "Logic Puzzles", "Puzzles de Lógica", "Logic Puzzles",
+     "Lógica deductiva, razonamiento",                "Deductive logic, reasoning",
      ["140K sesiones", "1080p"], ["140K sessions", "1080p"],
      "", 8),
-    ("block-puzzle",  "Block Puzzle",  "Encaje de piezas, líneas",                      "Piece fitting, lines",
+    ("block-puzzle",  "Block Puzzle",  "Puzzle de Bloques", "Block Puzzle",
+     "Encaje de piezas, líneas",                      "Piece fitting, lines",
      ["230K sesiones", "1080p"], ["230K sessions", "1080p"],
      "", 9),
 ]
@@ -143,6 +167,7 @@ def init_schema() -> None:
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(SCHEMA_SQL)
+            cur.execute(MIGRATIONS_SQL)
             # Seed stats (idempotente)
             cur.executemany(
                 """INSERT INTO stats (key, value, label_es, label_en, display_order)
@@ -153,14 +178,15 @@ def init_schema() -> None:
             stats_inserted = cur.rowcount
             # Seed games (idempotente)
             cur.executemany(
-                """INSERT INTO games (slug, title, description_es, description_en,
+                """INSERT INTO games (slug, title, title_es, title_en,
+                                      description_es, description_en,
                                       tags_es, tags_en, image_url, display_order)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (slug) DO NOTHING""",
                 GAMES_SEED,
             )
             games_inserted = cur.rowcount
-            log.info("[db] schema OK — stats nuevas: %d, games nuevos: %d",
+            log.info("[db] schema+migraciones OK — stats nuevas: %d, games nuevos: %d",
                      stats_inserted, games_inserted)
     except Exception:
         log.exception("[db] error inicializando schema")
@@ -314,12 +340,14 @@ def list_games(include_meta: bool = False) -> list:
     en memoria si la DB no está disponible."""
     if not is_enabled():
         return [
-            {"slug": s, "title": t, "description_es": de, "description_en": den,
-             "tags_es": list(tes), "tags_en": list(ten),
+            {"slug": s, "title": t, "title_es": tes_, "title_en": ten_,
+             "description_es": de, "description_en": den,
+             "tags_es": list(tags_es), "tags_en": list(tags_en),
              "image_url": img, "display_order": ord_}
-            for (s, t, de, den, tes, ten, img, ord_) in GAMES_SEED
+            for (s, t, tes_, ten_, de, den, tags_es, tags_en, img, ord_) in GAMES_SEED
         ]
-    cols = ("slug, title, description_es, description_en, "
+    cols = ("slug, title, title_es, title_en, "
+            "description_es, description_en, "
             "tags_es, tags_en, image_url, display_order")
     if include_meta:
         cols += ", updated_at"
@@ -340,9 +368,17 @@ def upsert_game(payload: dict) -> dict:
     slug = (payload.get("slug") or "").strip()
     if not slug:
         raise ValueError("slug requerido")
-    title = (payload.get("title") or "").strip()
+
+    title_es = (payload.get("title_es") or "").strip()
+    title_en = (payload.get("title_en") or "").strip()
+    # title (legacy / fallback): si no viene, usamos title_es; si tampoco,
+    # title_en. Permite que el form admin no envíe title si no quiere.
+    title = (payload.get("title") or "").strip() or title_es or title_en
     if not title:
-        raise ValueError("title requerido")
+        raise ValueError("title (o title_es / title_en) requerido")
+    # Si solo hay title pero no title_es / title_en, replicar title en ambos
+    if not title_es: title_es = title
+    if not title_en: title_en = title
 
     def _list(v):
         if v is None: return []
@@ -363,11 +399,14 @@ def upsert_game(payload: dict) -> dict:
     with conn() as c, c.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO games (slug, title, description_es, description_en,
+            INSERT INTO games (slug, title, title_es, title_en,
+                               description_es, description_en,
                                tags_es, tags_en, image_url, display_order, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (slug) DO UPDATE SET
                 title = EXCLUDED.title,
+                title_es = EXCLUDED.title_es,
+                title_en = EXCLUDED.title_en,
                 description_es = EXCLUDED.description_es,
                 description_en = EXCLUDED.description_en,
                 tags_es = EXCLUDED.tags_es,
@@ -375,10 +414,12 @@ def upsert_game(payload: dict) -> dict:
                 image_url = EXCLUDED.image_url,
                 display_order = EXCLUDED.display_order,
                 updated_at = NOW()
-            RETURNING slug, title, description_es, description_en,
+            RETURNING slug, title, title_es, title_en,
+                      description_es, description_en,
                       tags_es, tags_en, image_url, display_order, updated_at
             """,
-            (slug, title, desc_es, desc_en, tags_es, tags_en, image_url, display_order),
+            (slug, title, title_es, title_en, desc_es, desc_en,
+             tags_es, tags_en, image_url, display_order),
         )
         row = cur.fetchone()
         if row and row.get("updated_at"):

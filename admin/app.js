@@ -393,6 +393,12 @@
     }
     $("#games-tbody").innerHTML = allGames.map(g => {
       const tagsEs = (g.tags_es || []).join(", ");
+      const titleEs = g.title_es || g.title || "";
+      const titleEn = g.title_en || g.title || "";
+      const titleHtml = titleEs === titleEn
+        ? escapeHtml(titleEs)
+        : `<div class="font-medium">${escapeHtml(titleEs)}</div>
+           <div class="text-gray-500 text-xs italic">${escapeHtml(titleEn)}</div>`;
       const img = g.image_url
         ? `<img src="${escapeHtml(g.image_url)}" alt="" class="w-12 h-8 object-cover rounded">`
         : `<div class="w-12 h-8 bg-dark-900 rounded flex items-center justify-center"><i class="fa-solid fa-image text-gray-600 text-xs"></i></div>`;
@@ -401,7 +407,7 @@
           <td class="px-4 py-3 text-gray-500">${escapeHtml(g.display_order ?? 0)}</td>
           <td class="px-4 py-3">${img}</td>
           <td class="px-4 py-3 font-mono text-brand-400 text-xs">${escapeHtml(g.slug)}</td>
-          <td class="px-4 py-3 font-medium">${escapeHtml(g.title)}</td>
+          <td class="px-4 py-3">${titleHtml}</td>
           <td class="px-4 py-3 text-gray-300 max-w-xs truncate">${escapeHtml(g.description_es || "—")}</td>
           <td class="px-4 py-3 text-xs text-gray-400">${escapeHtml(tagsEs || "—")}</td>
           <td class="px-4 py-3 text-right whitespace-nowrap">
@@ -441,7 +447,10 @@
     $("#game-form-error").classList.add("hidden");
     $("#game-slug").value      = game ? game.slug : "";
     $("#game-slug").disabled    = !isNew;
-    $("#game-title").value      = game ? game.title : "";
+    // Si el juego solo tiene title (legacy), úsalo como default para ambos idiomas
+    const fallback = game ? game.title : "";
+    $("#game-title-es").value   = game ? (game.title_es || fallback) : "";
+    $("#game-title-en").value   = game ? (game.title_en || fallback) : "";
     $("#game-image").value      = game ? (game.image_url || "") : "";
     $("#game-desc-es").value    = game ? (game.description_es || "") : "";
     $("#game-desc-en").value    = game ? (game.description_en || "") : "";
@@ -450,7 +459,7 @@
     $("#game-order").value      = game ? (game.display_order ?? 0) : 0;
     refreshGameImagePreview();
     openModal("#game-modal");
-    setTimeout(() => $("#game-title").focus(), 0);
+    setTimeout(() => $("#game-title-es").focus(), 0);
   }
 
   function refreshGameImagePreview() {
@@ -468,9 +477,13 @@
   async function submitGameForm(e) {
     e.preventDefault();
     $("#game-form-error").classList.add("hidden");
+    const titleEs = $("#game-title-es").value.trim();
+    const titleEn = $("#game-title-en").value.trim();
     const payload = {
       slug:           $("#game-slug").value.trim(),
-      title:          $("#game-title").value.trim(),
+      title_es:       titleEs,
+      title_en:       titleEn,
+      title:          titleEs || titleEn,  // legacy fallback
       image_url:      $("#game-image").value.trim(),
       description_es: $("#game-desc-es").value.trim(),
       description_en: $("#game-desc-en").value.trim(),
