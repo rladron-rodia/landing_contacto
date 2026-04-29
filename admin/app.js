@@ -34,6 +34,7 @@
   let allGames      = [];
   let allPublishers = [];
   let allLinks      = [];
+  let allDelivery   = [];
   let currentView   = "contacts";
 
   // ---------- Token ----------
@@ -106,11 +107,13 @@
     $("#games-view").classList.toggle("hidden", name !== "games");
     $("#publishers-view").classList.toggle("hidden", name !== "publishers");
     $("#links-view").classList.toggle("hidden", name !== "links");
+    $("#delivery-view").classList.toggle("hidden", name !== "delivery");
     if (name === "contacts")   loadContacts();
     if (name === "stats")      loadStats();
     if (name === "games")      loadGames();
     if (name === "publishers") loadPublishers();
     if (name === "links")      loadLinks();
+    if (name === "delivery")   loadDelivery();
   }
 
   // ============================================================
@@ -776,6 +779,176 @@
   });
   $("#link-form").addEventListener("submit", submitLinkForm);
   $("#link-image").addEventListener("input", refreshLinkImagePreview);
+
+  // ============================================================
+  //   DELIVERY OPTIONS (Data Formats + Delivery Methods)
+  // ============================================================
+
+  function categoryLabel(cat) {
+    return cat === "data_formats" ? "Data Format"
+         : cat === "delivery_methods" ? "Delivery Method"
+         : cat;
+  }
+
+  function categoryBadge(cat) {
+    const cls = cat === "data_formats" ? "bg-brand-500/20 text-brand-400"
+              : cat === "delivery_methods" ? "bg-cyan-500/20 text-cyan-400"
+              : "bg-gray-700 text-gray-400";
+    return `<span class="${cls} px-2 py-1 rounded text-xs font-medium">${escapeHtml(categoryLabel(cat))}</span>`;
+  }
+
+  function renderDeliveryRows() {
+    $("#delivery-count").textContent = `${allDelivery.length}`;
+    if (!allDelivery.length) {
+      $("#delivery-tbody").innerHTML = `
+        <tr><td colspan="7" class="px-4 py-12 text-center text-gray-500">
+          No hay opciones. Pulsa <strong>+ Data Format</strong> o <strong>+ Delivery Method</strong>.
+        </td></tr>`;
+      $("#delivery-loading").classList.add("hidden");
+      $("#delivery-error").classList.add("hidden");
+      $("#delivery-table-wrap").classList.remove("hidden");
+      return;
+    }
+    $("#delivery-tbody").innerHTML = allDelivery.map(o => {
+      const titleEs = o.title_es || o.title || "";
+      const titleEn = o.title_en || o.title || "";
+      const titleHtml = titleEs === titleEn
+        ? escapeHtml(titleEs)
+        : `<div class="font-medium">${escapeHtml(titleEs)}</div>
+           <div class="text-gray-500 text-xs italic">${escapeHtml(titleEn)}</div>`;
+      const iconHtml = o.icon
+        ? `<i class="${escapeHtml(o.icon)} text-xl ${escapeHtml(o.icon_color || "text-brand-400")}"></i>`
+        : `<span class="text-gray-600 text-xs">—</span>`;
+      return `
+        <tr class="hover:bg-white/5">
+          <td class="px-4 py-3 text-gray-500">${escapeHtml(o.display_order ?? 0)}</td>
+          <td class="px-4 py-3">${iconHtml}</td>
+          <td class="px-4 py-3 font-mono text-brand-400 text-xs">${escapeHtml(o.slug)}</td>
+          <td class="px-4 py-3">${categoryBadge(o.category)}</td>
+          <td class="px-4 py-3">${titleHtml}</td>
+          <td class="px-4 py-3 text-gray-300 max-w-xs truncate text-xs">${escapeHtml(o.description_es || "—")}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button class="delivery-edit text-gray-400 hover:text-brand-400 p-2" data-slug="${escapeHtml(o.slug)}" title="Editar">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button class="delivery-delete text-gray-400 hover:text-red-400 p-2" data-slug="${escapeHtml(o.slug)}" title="Borrar">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+    }).join("");
+    $("#delivery-loading").classList.add("hidden");
+    $("#delivery-error").classList.add("hidden");
+    $("#delivery-table-wrap").classList.remove("hidden");
+  }
+
+  async function loadDelivery() {
+    $("#delivery-loading").classList.remove("hidden");
+    $("#delivery-error").classList.add("hidden");
+    $("#delivery-table-wrap").classList.add("hidden");
+    try {
+      const json = await api("GET", "/api/admin/delivery-options");
+      allDelivery = json.options || [];
+      renderDeliveryRows();
+    } catch (err) {
+      if (err.message === "Token inválido") return showLogin(err.message);
+      $("#delivery-error-msg").textContent = err.message;
+      $("#delivery-loading").classList.add("hidden");
+      $("#delivery-error").classList.remove("hidden");
+    }
+  }
+
+  function refreshDeliveryPreview() {
+    const icon  = $("#delivery-icon").value.trim() || "fa-solid fa-circle";
+    const color = $("#delivery-icon-color").value || "text-brand-400";
+    const titleEs = $("#delivery-title-es").value.trim() || "Título";
+    const descEs  = $("#delivery-desc-es").value.trim() || "Descripción";
+    $("#delivery-icon-preview").className = `${icon} text-2xl ${color}`;
+    $("#delivery-title-preview").textContent = titleEs;
+    $("#delivery-desc-preview").textContent  = descEs;
+  }
+
+  function openDeliveryModal(opt, defaultCategory) {
+    const isNew = !opt;
+    const cat = opt ? opt.category : (defaultCategory || "data_formats");
+    $("#delivery-modal-title").textContent = (isNew ? "Nuevo: " : "Editar: ") + categoryLabel(cat);
+    $("#delivery-form-error").classList.add("hidden");
+    $("#delivery-slug").value         = opt ? opt.slug : "";
+    $("#delivery-slug").disabled       = !isNew;
+    $("#delivery-category").value      = cat;
+    const fallback = opt ? opt.title : "";
+    $("#delivery-title-es").value     = opt ? (opt.title_es || fallback) : "";
+    $("#delivery-title-en").value     = opt ? (opt.title_en || fallback) : "";
+    $("#delivery-desc-es").value       = opt ? (opt.description_es || "") : "";
+    $("#delivery-desc-en").value       = opt ? (opt.description_en || "") : "";
+    $("#delivery-icon").value          = opt ? (opt.icon || "fa-solid fa-circle") : "fa-solid fa-circle";
+    $("#delivery-icon-color").value    = opt ? (opt.icon_color || "text-brand-400") : "text-brand-400";
+    $("#delivery-order").value         = opt ? (opt.display_order ?? 0) : 0;
+    refreshDeliveryPreview();
+    openModal("#delivery-modal");
+    setTimeout(() => $("#delivery-title-es").focus(), 0);
+  }
+
+  async function submitDeliveryForm(e) {
+    e.preventDefault();
+    $("#delivery-form-error").classList.add("hidden");
+    const titleEs = $("#delivery-title-es").value.trim();
+    const titleEn = $("#delivery-title-en").value.trim();
+    const payload = {
+      slug:           $("#delivery-slug").value.trim(),
+      category:       $("#delivery-category").value,
+      title:          titleEs || titleEn,
+      title_es:       titleEs,
+      title_en:       titleEn,
+      description_es: $("#delivery-desc-es").value.trim(),
+      description_en: $("#delivery-desc-en").value.trim(),
+      icon:           $("#delivery-icon").value.trim(),
+      icon_color:     $("#delivery-icon-color").value,
+      display_order:  parseInt($("#delivery-order").value, 10) || 0,
+    };
+    try {
+      await api("POST", "/api/admin/delivery-options", payload);
+      closeAllModals();
+      try { localStorage.removeItem("monou_delivery_v1"); } catch (e) {}
+      loadDelivery();
+    } catch (err) {
+      $("#delivery-form-error").textContent = err.message;
+      $("#delivery-form-error").classList.remove("hidden");
+    }
+  }
+
+  async function deleteDelivery(slug) {
+    if (!confirm(`¿Borrar la opción "${slug}"?`)) return;
+    try {
+      await api("DELETE", `/api/admin/delivery-options/${encodeURIComponent(slug)}`);
+      try { localStorage.removeItem("monou_delivery_v1"); } catch (e) {}
+      loadDelivery();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
+  $("#delivery-refresh").addEventListener("click", loadDelivery);
+  $("#delivery-new-data-formats").addEventListener("click",
+      () => openDeliveryModal(null, "data_formats"));
+  $("#delivery-new-delivery-methods").addEventListener("click",
+      () => openDeliveryModal(null, "delivery_methods"));
+  $("#delivery-tbody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".delivery-edit");
+    const delBtn  = e.target.closest(".delivery-delete");
+    if (editBtn) {
+      const o = allDelivery.find(x => x.slug === editBtn.dataset.slug);
+      if (o) openDeliveryModal(o);
+    } else if (delBtn) {
+      deleteDelivery(delBtn.dataset.slug);
+    }
+  });
+  $("#delivery-form").addEventListener("submit", submitDeliveryForm);
+  // Preview en vivo al editar cualquier campo
+  ["#delivery-icon", "#delivery-icon-color", "#delivery-title-es", "#delivery-desc-es"].forEach(sel => {
+    document.querySelector(sel).addEventListener("input", refreshDeliveryPreview);
+    document.querySelector(sel).addEventListener("change", refreshDeliveryPreview);
+  });
 
   // Modales
   $$(".modal-close").forEach(btn => btn.addEventListener("click", closeAllModals));

@@ -83,6 +83,10 @@
                 class="nav-btn w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
           <i class="fa-solid fa-link w-4"></i> Configuración URLs
         </button>
+        <button data-view="delivery"
+                class="nav-btn w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
+          <i class="fa-solid fa-truck-fast w-4"></i> Formatos &amp; Entrega
+        </button>
       </nav>
       <div class="p-3 border-t border-white/10">
         <button id="logout-btn"
@@ -354,6 +358,59 @@
         </div>
       </section>
 
+      <!-- ─── Delivery options view ─── -->
+      <section id="delivery-view" class="hidden">
+        <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
+          <div class="px-6 py-4 flex items-center gap-4">
+            <i class="fa-solid fa-truck-fast text-brand-400"></i>
+            <h1 class="text-lg font-semibold">Formatos &amp; Entrega</h1>
+            <span id="delivery-count" class="text-xs bg-dark-900 px-2 py-1 rounded-full text-gray-400"></span>
+            <div class="ml-auto flex items-center gap-3">
+              <button id="delivery-refresh" title="Refrescar" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+              <button id="delivery-new-data-formats" class="bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> Data Format
+              </button>
+              <button id="delivery-new-delivery-methods" class="bg-accent-cyan hover:bg-cyan-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2" style="background-color:#22d3ee">
+                <i class="fa-solid fa-plus"></i> Delivery Method
+              </button>
+            </div>
+          </div>
+          <div class="px-6 pb-4 text-xs text-gray-500">
+            Items de las dos columnas en la sección "Formato de Entrega" de la landing.
+            Categorías: <code>data_formats</code> (izquierda) y <code>delivery_methods</code> (derecha).
+            El icono se especifica con clases FontAwesome (ej. <code>fa-solid fa-cloud-arrow-down</code>).
+          </div>
+        </header>
+
+        <div class="p-6">
+          <div id="delivery-loading" class="text-center text-gray-400 py-12">
+            <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+          </div>
+          <div id="delivery-error" class="hidden text-center text-red-400 py-12">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+            <p id="delivery-error-msg" class="text-sm"></p>
+          </div>
+          <div id="delivery-table-wrap" class="hidden overflow-x-auto bg-dark-800 border border-white/10 rounded-2xl">
+            <table class="w-full text-sm">
+              <thead class="bg-dark-700/50 text-xs uppercase text-gray-400">
+                <tr>
+                  <th class="text-left px-4 py-3 w-16">Orden</th>
+                  <th class="text-left px-4 py-3 w-16">Icono</th>
+                  <th class="text-left px-4 py-3">Slug</th>
+                  <th class="text-left px-4 py-3">Categoría</th>
+                  <th class="text-left px-4 py-3">Título</th>
+                  <th class="text-left px-4 py-3">Descripción ES</th>
+                  <th class="text-right px-4 py-3 w-24">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="delivery-tbody" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -562,6 +619,111 @@
           </div>
         </div>
         <p id="link-form-error" class="hidden text-red-400 text-xs"></p>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
+            Guardar
+          </button>
+          <button type="button" class="modal-close px-4 py-2.5 border border-white/10 rounded-lg hover:bg-white/5">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── Modal: editar/crear delivery option ───── -->
+  <div id="delivery-modal" class="hidden fixed inset-0 z-20 bg-black/70 flex items-center justify-center p-6">
+    <div class="bg-dark-800 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-white/10 flex items-center gap-3">
+        <i class="fa-solid fa-truck-fast text-brand-400"></i>
+        <h2 id="delivery-modal-title" class="text-lg font-semibold">Editar opción</h2>
+        <button class="modal-close ml-auto text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <form id="delivery-form" class="p-6 space-y-4 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Slug</label>
+            <input id="delivery-slug" name="slug" required pattern="[a-z0-9_\-]+" placeholder="cloud-storage"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Categoría</label>
+            <select id="delivery-category" name="category" required
+                    class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+              <option value="data_formats">Data Formats</option>
+              <option value="delivery_methods">Delivery Methods</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Título ES</label>
+            <input id="delivery-title-es" name="title_es" required placeholder="Cloud Storage"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Título EN</label>
+            <input id="delivery-title-en" name="title_en" required placeholder="Cloud Storage"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Descripción ES</label>
+            <textarea id="delivery-desc-es" name="description_es" rows="2"
+                      class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 resize-none"></textarea>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Descripción EN</label>
+            <textarea id="delivery-desc-en" name="description_en" rows="2"
+                      class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 resize-none"></textarea>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3 items-end">
+          <div class="col-span-2">
+            <label class="block text-gray-400 text-xs uppercase mb-1">Icono (clase FontAwesome)</label>
+            <input id="delivery-icon" name="icon" placeholder="fa-solid fa-cloud-arrow-down"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 font-mono text-xs">
+            <p class="text-gray-500 text-xs mt-1">
+              Ejemplos: <code>fa-solid fa-brackets-curly</code>, <code>fa-solid fa-plug</code>,
+              <code>fa-solid fa-cloud-arrow-down</code>, <code>fa-solid fa-database</code>.
+              Catálogo completo en <a href="https://fontawesome.com/icons" target="_blank" class="text-brand-400 underline">fontawesome.com/icons</a>.
+            </p>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Color del icono</label>
+            <select id="delivery-icon-color" name="icon_color"
+                    class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+              <option value="text-brand-400">Verde (brand)</option>
+              <option value="text-accent-cyan">Cyan</option>
+              <option value="text-accent-purple">Morado</option>
+              <option value="text-gray-400">Gris</option>
+              <option value="text-yellow-400">Amarillo</option>
+              <option value="text-red-400">Rojo</option>
+              <option value="text-blue-400">Azul</option>
+              <option value="text-green-400">Verde claro</option>
+              <option value="text-orange-400">Naranja</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 items-center">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Vista previa</label>
+            <div class="bg-dark-900 border border-white/10 rounded-lg p-4 flex items-center gap-3 min-h-[60px]">
+              <i id="delivery-icon-preview" class="fa-solid fa-circle text-2xl text-brand-400"></i>
+              <div>
+                <div id="delivery-title-preview" class="font-semibold text-white text-sm">Título</div>
+                <div id="delivery-desc-preview" class="text-xs text-gray-400">Descripción</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Orden</label>
+            <input id="delivery-order" name="display_order" type="number" min="0" value="0"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <p id="delivery-form-error" class="hidden text-red-400 text-xs"></p>
         <div class="flex gap-3 pt-2">
           <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
             Guardar

@@ -74,6 +74,20 @@ CREATE TABLE IF NOT EXISTS site_links (
     display_order  INT NOT NULL DEFAULT 0,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS delivery_options (
+    slug           TEXT PRIMARY KEY,
+    category       TEXT NOT NULL,          -- 'data_formats' | 'delivery_methods'
+    title          TEXT NOT NULL,          -- fallback legacy
+    title_es       TEXT,
+    title_en       TEXT,
+    description_es TEXT,
+    description_en TEXT,
+    icon           TEXT,                   -- 'fa-solid fa-cloud-arrow-down'
+    icon_color     TEXT,                   -- 'text-brand-400'
+    display_order  INT NOT NULL DEFAULT 0,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
 # Migraciones idempotentes que se ejecutan al boot. ALTER TABLE IF NOT EXISTS
@@ -186,6 +200,34 @@ SITE_LINKS_SEED = [
      1),
 ]
 
+# Datos iniciales de delivery_options (Data Formats + Delivery Methods).
+# Tuple: (slug, category, title, title_es, title_en, description_es, description_en,
+#         icon, icon_color, display_order)
+DELIVERY_OPTIONS_SEED = [
+    # ── Data Formats ──
+    ("json-jsonl",     "data_formats",
+     "JSON / JSONL",   "JSON / JSONL", "JSON / JSONL",
+     "Metadata estructurada, eventos, timestamps y anotaciones en formato JSON Lines.",
+     "Structured metadata, events, timestamps and annotations in JSON Lines format.",
+     "fa-solid fa-brackets-curly", "text-brand-400", 1),
+    ("custom-format",  "data_formats",
+     "Formato Personalizado", "Formato Personalizado", "Custom Format",
+     "Adaptamos la estructura de datos a tu stack específico de ML/IA.",
+     "We adapt the data structure to your specific ML/AI stack.",
+     "fa-solid fa-gears", "text-gray-400", 2),
+    # ── Delivery Methods ──
+    ("cloud-storage",  "delivery_methods",
+     "Cloud Storage",  "Cloud Storage", "Cloud Storage",
+     "AWS S3, Google Cloud Storage o Azure Blob con acceso controlado y versionado.",
+     "AWS S3, Google Cloud Storage or Azure Blob with controlled access and versioning.",
+     "fa-solid fa-cloud-arrow-down", "text-brand-400", 1),
+    ("api-rest",       "delivery_methods",
+     "API REST",       "API REST", "API REST",
+     "Acceso programático con filtros, paginación y streaming de datos en tiempo real.",
+     "Programmatic access with filters, pagination and real-time data streaming.",
+     "fa-solid fa-plug", "text-accent-cyan", 2),
+]
+
 
 def is_enabled() -> bool:
     return bool(DATABASE_URL)
@@ -252,8 +294,18 @@ def init_schema() -> None:
                 SITE_LINKS_SEED,
             )
             links_inserted = cur.rowcount
-            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d",
-                     stats_inserted, games_inserted, links_inserted)
+            # Seed delivery_options (idempotente)
+            cur.executemany(
+                """INSERT INTO delivery_options (slug, category, title, title_es, title_en,
+                                                  description_es, description_en,
+                                                  icon, icon_color, display_order)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (slug) DO NOTHING""",
+                DELIVERY_OPTIONS_SEED,
+            )
+            delivery_inserted = cur.rowcount
+            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d, delivery: %d",
+                     stats_inserted, games_inserted, links_inserted, delivery_inserted)
     except Exception:
         log.exception("[db] error inicializando schema")
 
@@ -596,4 +648,114 @@ def delete_site_link(key: str) -> bool:
         raise RuntimeError("DB no está habilitada")
     with conn() as c, c.cursor() as cur:
         cur.execute("DELETE FROM site_links WHERE key = %s", (key,))
+        return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Delivery options CRUD (Data Formats + Delivery Methods)
+# ---------------------------------------------------------------------------
+
+VALID_DELIVERY_CATEGORIES = ("data_formats", "delivery_methods")
+
+
+def list_delivery_options(include_meta: bool = False, category: str = None) -> list:
+    """Lista todas las opciones de entrega ordenadas por category + display_order.
+    Fallback al seed en memoria si la DB no está disponible."""
+    if not is_enabled():
+        rows = [
+            {"slug": s, "category": cat, "title": t,
+             "title_es": tes_, "title_en": ten_,
+             "description_es": de, "description_en": den,
+             "icon": ic, "icon_color": col, "display_order": ord_}
+            for (s, cat, t, tes_, ten_, de, den, ic, col, ord_) in DELIVERY_OPTIONS_SEED
+        ]
+        if category:
+            rows = [r for r in rows if r["category"] == category]
+        return rows
+    cols = ("slug, category, title, title_es, title_en, "
+            "description_es, description_en, icon, icon_color, display_order")
+    if include_meta:
+        cols += ", updated_at"
+    with conn() as c, c.cursor() as cur:
+        if category:
+            cur.execute(
+                f"SELECT {cols} FROM delivery_options WHERE category = %s ORDER BY display_order, slug",
+                (category,),
+            )
+        else:
+            cur.execute(f"SELECT {cols} FROM delivery_options ORDER BY category, display_order, slug")
+        rows = cur.fetchall()
+        if include_meta:
+            for r in rows:
+                if r.get("updated_at"):
+                    r["updated_at"] = r["updated_at"].isoformat()
+        return rows
+
+
+def upsert_delivery_option(payload: dict) -> dict:
+    """Crea o actualiza una opción de entrega por slug."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    slug = (payload.get("slug") or "").strip()
+    if not slug:
+        raise ValueError("slug requerido")
+
+    title_es = (payload.get("title_es") or "").strip()
+    title_en = (payload.get("title_en") or "").strip()
+    title    = (payload.get("title") or "").strip() or title_es or title_en
+    if not title:
+        raise ValueError("title (o title_es/title_en) requerido")
+    if not title_es: title_es = title
+    if not title_en: title_en = title
+
+    category = (payload.get("category") or "").strip().lower()
+    if category not in VALID_DELIVERY_CATEGORIES:
+        raise ValueError(f"category debe ser uno de: {VALID_DELIVERY_CATEGORIES}")
+
+    desc_es    = (payload.get("description_es") or "").strip() or None
+    desc_en    = (payload.get("description_en") or "").strip() or None
+    icon       = (payload.get("icon") or "").strip() or None
+    icon_color = (payload.get("icon_color") or "").strip() or None
+    try:
+        display_order = int(payload.get("display_order") or 0)
+    except (TypeError, ValueError):
+        display_order = 0
+
+    with conn() as c, c.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO delivery_options (slug, category, title, title_es, title_en,
+                                           description_es, description_en, icon, icon_color,
+                                           display_order, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (slug) DO UPDATE SET
+                category = EXCLUDED.category,
+                title = EXCLUDED.title,
+                title_es = EXCLUDED.title_es,
+                title_en = EXCLUDED.title_en,
+                description_es = EXCLUDED.description_es,
+                description_en = EXCLUDED.description_en,
+                icon = EXCLUDED.icon,
+                icon_color = EXCLUDED.icon_color,
+                display_order = EXCLUDED.display_order,
+                updated_at = NOW()
+            RETURNING slug, category, title, title_es, title_en,
+                      description_es, description_en, icon, icon_color,
+                      display_order, updated_at
+            """,
+            (slug, category, title, title_es, title_en, desc_es, desc_en,
+             icon, icon_color, display_order),
+        )
+        row = cur.fetchone()
+        if row and row.get("updated_at"):
+            row["updated_at"] = row["updated_at"].isoformat()
+        return row
+
+
+def delete_delivery_option(slug: str) -> bool:
+    """Borra una opción de entrega por slug."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    with conn() as c, c.cursor() as cur:
+        cur.execute("DELETE FROM delivery_options WHERE slug = %s", (slug,))
         return cur.rowcount > 0
