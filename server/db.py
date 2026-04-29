@@ -63,6 +63,17 @@ CREATE TABLE IF NOT EXISTS games (
     display_order  INT NOT NULL DEFAULT 0,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS site_links (
+    key            TEXT PRIMARY KEY,
+    description    TEXT,                  -- descripción para el admin (no se muestra en la landing)
+    url            TEXT,                  -- destino del enlace
+    image_url      TEXT,                  -- imagen opcional asociada al CTA
+    label_es       TEXT,                  -- (opcional) override del texto visible en ES
+    label_en       TEXT,                  -- (opcional) override del texto visible en EN
+    display_order  INT NOT NULL DEFAULT 0,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
 # Migraciones idempotentes que se ejecutan al boot. ALTER TABLE IF NOT EXISTS
@@ -164,6 +175,17 @@ GAMES_SEED = [
      "publishers", 99),
 ]
 
+# Datos iniciales de site_links. Misma lógica idempotente que stats/games.
+# Tuple: (key, description, url, image_url, label_es, label_en, display_order)
+SITE_LINKS_SEED = [
+    ("view_full_catalog",
+     "CTA del card '+200 Juegos Disponibles' en la sección F2P. La URL controla a dónde lleva el botón. La imagen reemplaza el icono.",
+     "",  # url se configura desde el admin
+     "",  # image_url se configura desde el admin
+     "Ver Catálogo Completo", "View Full Catalog",
+     1),
+]
+
 
 def is_enabled() -> bool:
     return bool(DATABASE_URL)
@@ -221,8 +243,17 @@ def init_schema() -> None:
                 GAMES_SEED,
             )
             games_inserted = cur.rowcount
-            log.info("[db] schema+migraciones OK — stats nuevas: %d, games nuevos: %d",
-                     stats_inserted, games_inserted)
+            # Seed site_links (idempotente)
+            cur.executemany(
+                """INSERT INTO site_links (key, description, url, image_url,
+                                           label_es, label_en, display_order)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (key) DO NOTHING""",
+                SITE_LINKS_SEED,
+            )
+            links_inserted = cur.rowcount
+            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d",
+                     stats_inserted, games_inserted, links_inserted)
     except Exception:
         log.exception("[db] error inicializando schema")
 
@@ -487,4 +518,82 @@ def delete_game(slug: str) -> bool:
         raise RuntimeError("DB no está habilitada")
     with conn() as c, c.cursor() as cur:
         cur.execute("DELETE FROM games WHERE slug = %s", (slug,))
+        return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Site links CRUD (configuración de URLs e imágenes en lugares específicos)
+# ---------------------------------------------------------------------------
+
+def list_site_links(include_meta: bool = False) -> list:
+    """Lista todos los site_links ordenados por display_order. Fallback al
+    seed en memoria si la DB no está disponible."""
+    if not is_enabled():
+        return [
+            {"key": k, "description": d, "url": u, "image_url": img,
+             "label_es": le, "label_en": len_, "display_order": ord_}
+            for (k, d, u, img, le, len_, ord_) in SITE_LINKS_SEED
+        ]
+    cols = "key, description, url, image_url, label_es, label_en, display_order"
+    if include_meta:
+        cols += ", updated_at"
+    with conn() as c, c.cursor() as cur:
+        cur.execute(f"SELECT {cols} FROM site_links ORDER BY display_order, key")
+        rows = cur.fetchall()
+        if include_meta:
+            for r in rows:
+                if r.get("updated_at"):
+                    r["updated_at"] = r["updated_at"].isoformat()
+        return rows
+
+
+def upsert_site_link(payload: dict) -> dict:
+    """Crea o actualiza un site_link por key."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    key = (payload.get("key") or "").strip()
+    if not key:
+        raise ValueError("key requerido")
+
+    description = (payload.get("description") or "").strip() or None
+    url         = (payload.get("url") or "").strip() or None
+    image_url   = (payload.get("image_url") or "").strip() or None
+    label_es    = (payload.get("label_es") or "").strip() or None
+    label_en    = (payload.get("label_en") or "").strip() or None
+    try:
+        display_order = int(payload.get("display_order") or 0)
+    except (TypeError, ValueError):
+        display_order = 0
+
+    with conn() as c, c.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO site_links (key, description, url, image_url,
+                                    label_es, label_en, display_order, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (key) DO UPDATE SET
+                description = EXCLUDED.description,
+                url = EXCLUDED.url,
+                image_url = EXCLUDED.image_url,
+                label_es = EXCLUDED.label_es,
+                label_en = EXCLUDED.label_en,
+                display_order = EXCLUDED.display_order,
+                updated_at = NOW()
+            RETURNING key, description, url, image_url, label_es, label_en,
+                      display_order, updated_at
+            """,
+            (key, description, url, image_url, label_es, label_en, display_order),
+        )
+        row = cur.fetchone()
+        if row and row.get("updated_at"):
+            row["updated_at"] = row["updated_at"].isoformat()
+        return row
+
+
+def delete_site_link(key: str) -> bool:
+    """Borra un site_link por key."""
+    if not is_enabled():
+        raise RuntimeError("DB no está habilitada")
+    with conn() as c, c.cursor() as cur:
+        cur.execute("DELETE FROM site_links WHERE key = %s", (key,))
         return cur.rowcount > 0

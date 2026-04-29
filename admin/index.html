@@ -79,6 +79,10 @@
                 class="nav-btn w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
           <i class="fa-solid fa-trophy w-4"></i> Juegos Publishers
         </button>
+        <button data-view="links"
+                class="nav-btn w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5">
+          <i class="fa-solid fa-link w-4"></i> Configuración URLs
+        </button>
       </nav>
       <div class="p-3 border-t border-white/10">
         <button id="logout-btn"
@@ -300,6 +304,56 @@
         </div>
       </section>
 
+      <!-- ─── Site links view ─── -->
+      <section id="links-view" class="hidden">
+        <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
+          <div class="px-6 py-4 flex items-center gap-4">
+            <i class="fa-solid fa-link text-brand-400"></i>
+            <h1 class="text-lg font-semibold">Configuración URLs</h1>
+            <span id="links-count" class="text-xs bg-dark-900 px-2 py-1 rounded-full text-gray-400"></span>
+            <div class="ml-auto flex items-center gap-3">
+              <button id="links-refresh" title="Refrescar" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+              <button id="links-new" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> Nuevo
+              </button>
+            </div>
+          </div>
+          <div class="px-6 pb-4 text-xs text-gray-500">
+            Configura URLs e imágenes asociadas a textos específicos del sitio. Cada registro corresponde
+            a un <code>data-link-key</code> en el HTML. Por ejemplo, <code>view_full_catalog</code> controla
+            el destino del CTA "Ver Catálogo Completo" y la imagen del card "+200 Juegos".
+          </div>
+        </header>
+
+        <div class="p-6">
+          <div id="links-loading" class="text-center text-gray-400 py-12">
+            <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+          </div>
+          <div id="links-error" class="hidden text-center text-red-400 py-12">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+            <p id="links-error-msg" class="text-sm"></p>
+          </div>
+          <div id="links-table-wrap" class="hidden overflow-x-auto bg-dark-800 border border-white/10 rounded-2xl">
+            <table class="w-full text-sm">
+              <thead class="bg-dark-700/50 text-xs uppercase text-gray-400">
+                <tr>
+                  <th class="text-left px-4 py-3 w-16">Orden</th>
+                  <th class="text-left px-4 py-3 w-20">Imagen</th>
+                  <th class="text-left px-4 py-3">Key</th>
+                  <th class="text-left px-4 py-3">Etiqueta</th>
+                  <th class="text-left px-4 py-3">URL destino</th>
+                  <th class="text-left px-4 py-3">Descripción</th>
+                  <th class="text-right px-4 py-3 w-24">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="links-tbody" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -442,6 +496,72 @@
           </div>
         </div>
         <p id="game-form-error" class="hidden text-red-400 text-xs"></p>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
+            Guardar
+          </button>
+          <button type="button" class="modal-close px-4 py-2.5 border border-white/10 rounded-lg hover:bg-white/5">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── Modal: editar/crear site link ───── -->
+  <div id="link-modal" class="hidden fixed inset-0 z-20 bg-black/70 flex items-center justify-center p-6">
+    <div class="bg-dark-800 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-white/10 flex items-center gap-3">
+        <i class="fa-solid fa-link text-brand-400"></i>
+        <h2 id="link-modal-title" class="text-lg font-semibold">Editar enlace</h2>
+        <button class="modal-close ml-auto text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <form id="link-form" class="p-6 space-y-4 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Key</label>
+            <input id="link-key" name="key" required pattern="[a-z0-9_\-]+" placeholder="view_full_catalog"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+            <p class="text-gray-500 text-xs mt-1">Coincide con <code>data-link-key</code> en el HTML.</p>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Orden</label>
+            <input id="link-order" name="display_order" type="number" min="0" value="0"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Descripción <span class="text-gray-600 normal-case">(solo para tu referencia interna)</span></label>
+          <input id="link-description" name="description" placeholder="Qué controla este registro"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">URL de destino</label>
+          <input id="link-url" name="url" type="url" placeholder="https://catalogo.monou.gg"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">URL de la imagen <span class="text-gray-600 normal-case">(opcional — reemplaza el icono asociado)</span></label>
+          <input id="link-image" name="image_url" type="url" placeholder="https://..."
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          <div class="mt-2 hidden" id="link-image-preview-wrap">
+            <img id="link-image-preview" alt="preview"
+                 class="w-32 aspect-square object-cover rounded-lg border border-white/10">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Etiqueta ES <span class="text-gray-600 normal-case">(opcional)</span></label>
+            <input id="link-label-es" name="label_es" placeholder="Ver Catálogo Completo"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-xs uppercase mb-1">Etiqueta EN <span class="text-gray-600 normal-case">(opcional)</span></label>
+            <input id="link-label-en" name="label_en" placeholder="View Full Catalog"
+                   class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <p id="link-form-error" class="hidden text-red-400 text-xs"></p>
         <div class="flex gap-3 pt-2">
           <button type="submit" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg">
             Guardar
