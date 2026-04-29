@@ -50,10 +50,12 @@ CREATE TABLE IF NOT EXISTS stats (
 """
 
 # Datos iniciales de stats. Solo se insertan si la tabla está vacía.
+# Para actualizar los valores LIVE, usa el admin en /admin/ → Estadísticas
+# (no este seed, que solo aplica cuando la tabla está recién creada).
 STATS_SEED = [
-    ("capture_hours",  "10k+", "Horas de Captura",   "Capture Hours",   1),
-    ("indexed_videos", "2.5M", "Videos Indexados",   "Indexed Videos",  2),
-    ("games_covered",  "50+",  "Juegos Cubiertos",   "Games Covered",   3),
+    ("capture_hours",  "3.8K", "Horas de Captura Total", "Hours of Total Capture", 1),
+    ("indexed_videos", "2.2M", "Videos Indexados",       "Indexed Videos",         2),
+    ("games_covered",  "50+",  "Juegos Cubiertos",       "Games Covered",          3),
 ]
 
 
