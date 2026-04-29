@@ -243,13 +243,22 @@ def health():
     }), 200
 
 
+def _is_admin(req) -> bool:
+    """Valida el header Authorization Bearer contra ADMIN_TOKEN."""
+    token = os.getenv("ADMIN_TOKEN", "")
+    auth = req.headers.get("Authorization", "")
+    return bool(token) and auth == f"Bearer {token}"
+
+
+def _unauthorized():
+    return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+
 @app.route("/api/contacts", methods=["GET"])
 def list_contacts():
     """Lista los últimos contactos. Protegido con Bearer token (ADMIN_TOKEN)."""
-    token = os.getenv("ADMIN_TOKEN", "")
-    auth = request.headers.get("Authorization", "")
-    if not token or auth != f"Bearer {token}":
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    if not _is_admin(request):
+        return _unauthorized()
     try:
         limit = min(int(request.args.get("limit", 100)), 1000)
     except ValueError:
@@ -259,6 +268,56 @@ def list_contacts():
         if r.get("created_at"):
             r["created_at"] = r["created_at"].isoformat()
     return jsonify({"ok": True, "count": len(rows), "contacts": rows}), 200
+
+
+# ---------------------------------------------------------------------------
+# Stats — endpoint público (lo consume la landing) y admin CRUD
+# ---------------------------------------------------------------------------
+
+@app.route("/api/stats", methods=["GET"])
+def get_stats():
+    """Devuelve las stats activas para la landing. Público, sin auth."""
+    rows = db.list_stats(include_meta=False)
+    return jsonify({"ok": True, "stats": rows}), 200
+
+
+@app.route("/api/admin/stats", methods=["GET"])
+def admin_list_stats():
+    """Lista stats con metadatos (display_order, updated_at) para el admin."""
+    if not _is_admin(request):
+        return _unauthorized()
+    return jsonify({"ok": True, "stats": db.list_stats(include_meta=True)}), 200
+
+
+@app.route("/api/admin/stats", methods=["POST"])
+def admin_upsert_stat():
+    """Crea o actualiza un stat. Body JSON: {key, value, label_es?, label_en?, display_order?}."""
+    if not _is_admin(request):
+        return _unauthorized()
+    data = request.get_json(silent=True) or {}
+    try:
+        row = db.upsert_stat(data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Error guardando stat")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    return jsonify({"ok": True, "stat": row}), 200
+
+
+@app.route("/api/admin/stats/<key>", methods=["DELETE"])
+def admin_delete_stat(key):
+    """Borra un stat por key."""
+    if not _is_admin(request):
+        return _unauthorized()
+    try:
+        deleted = db.delete_stat(key)
+    except Exception as exc:
+        app.logger.exception("Error borrando stat")
+        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+    if not deleted:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True}), 200
 
 
 if __name__ == "__main__":
