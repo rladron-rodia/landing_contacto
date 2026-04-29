@@ -82,11 +82,27 @@
       if (text) tag.textContent = text;
     });
 
-    // Image
-    const imgEl = card.querySelector('[data-game-field="image"]');
-    if (imgEl && game.image_url) {
-      imgEl.setAttribute("src", game.image_url);
-      imgEl.setAttribute("alt", game.title || "");
+    // Image — algunas cards solo tienen un <i> icon, sin <img>. Si llega
+    // una image_url y no hay <img> aún, lo creamos dentro del contenedor
+    // aspect-video (sustituyendo el icon por la foto). Si ya hay <img>,
+    // solo actualizamos su src.
+    if (game.image_url) {
+      let imgEl = card.querySelector('[data-game-field="image"]');
+      if (!imgEl) {
+        const container = card.querySelector('.aspect-video');
+        if (container) {
+          // Limpia el contenido previo (icon de fontawesome, etc.)
+          container.innerHTML = "";
+          imgEl = document.createElement("img");
+          imgEl.setAttribute("data-game-field", "image");
+          imgEl.className = "w-full h-full object-cover";
+          container.appendChild(imgEl);
+        }
+      }
+      if (imgEl) {
+        imgEl.setAttribute("src", game.image_url);
+        imgEl.setAttribute("alt", game.title_es || game.title_en || game.title || "");
+      }
     }
   }
 
