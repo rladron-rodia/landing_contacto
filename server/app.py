@@ -24,6 +24,9 @@ Limitación del plan free de Resend SIN dominio verificado:
 """
 
 import os
+import re
+import html
+import hmac
 import socket
 import json
 import urllib.request
@@ -32,9 +35,33 @@ from contextlib import contextmanager
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
 import db  # módulo de persistencia (degrada a no-op si DATABASE_URL no está)
+
+
+# --------------------------------------------------------------------------
+# Constantes de validación / hardening
+# --------------------------------------------------------------------------
+
+# Tamaño máximo del body aceptado por el servidor (defensa contra DoS de
+# payloads gigantes). 64 KB es holgado para un formulario de contacto.
+MAX_CONTENT_LENGTH = 64 * 1024  # 64 KB
+
+# Longitudes máximas por campo (validación server-side, no confiar en el cliente)
+FIELD_LIMITS = {
+    "nombre":   200,
+    "email":    320,    # límite RFC 5321 práctico
+    "empresa":  200,
+    "caso_uso": 200,
+    "mensaje":  4000,
+}
+
+# Regex tolerante para email (no es RFC-perfecto, pero descarta basura obvia
+# sin falsos positivos en correos reales).
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 @contextmanager
@@ -57,10 +84,59 @@ def force_ipv4():
 load_dotenv()
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
 _origins = [o.strip() for o in ALLOWED_ORIGIN.split(",")] if ALLOWED_ORIGIN != "*" else "*"
 CORS(app, resources={r"/api/*": {"origins": _origins}}, supports_credentials=False)
+
+# Rate limiting (defensa contra abuso del formulario / fuerza bruta del admin).
+# Storage in-memory: las cuentas son por proceso de gunicorn. Con `-w 2` el
+# límite efectivo es ~2x el configurado, lo cual sigue siendo muy útil. Para
+# rate limiting estricto habría que migrar a Redis (ver SECURITY-TODO).
+def _client_ip():
+    """Resuelve la IP real respetando X-Forwarded-For (Render usa proxy)."""
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return get_remote_address()
+
+
+limiter = Limiter(
+    app=app,
+    key_func=_client_ip,
+    default_limits=["200 per hour"],
+    headers_enabled=True,
+    storage_uri="memory://",
+)
+
+
+# Devuelve 413 limpio si el body excede MAX_CONTENT_LENGTH (Flask lanza
+# RequestEntityTooLarge antes incluso de leer el body).
+@app.errorhandler(413)
+def _payload_too_large(_e):
+    return jsonify({"ok": False, "error": "payload demasiado grande"}), 413
+
+
+@app.errorhandler(429)
+def _rate_limited(_e):
+    return jsonify({"ok": False, "error": "demasiadas solicitudes, intenta más tarde"}), 429
+
+
+# Headers de seguridad mínimos en TODA respuesta de la API.
+# La landing se sirve desde GitHub Pages (otro host), así que CSP no aplica
+# acá; lo importante es que ningún navegador "snifee" los JSON como otra cosa,
+# y que las respuestas con datos sensibles (admin) no se cacheen.
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    # No cachear respuestas de endpoints admin (contienen datos sensibles)
+    if request.path.startswith("/api/admin") or request.path == "/api/contacts":
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
+
 
 # Inicializa el schema de la DB al boot (idempotente, no falla si no hay DB)
 db.init_schema()
@@ -113,7 +189,18 @@ def send_email(payload: dict) -> dict:
     caso_uso = (payload.get("caso_uso") or "").strip()
     mensaje  = (payload.get("mensaje")  or "").strip()
 
-    subject = f"[Monou.gg] Nueva solicitud de {nombre or 'sin nombre'}"
+    # Escape HTML de TODO input antes de interpolarlo en body_html.
+    # Sin esto, un atacante puede inyectar <script>, <img onerror=…>, o
+    # encadenar tags que rompan el correo en el cliente del destinatario.
+    e_nombre   = html.escape(nombre,   quote=True)
+    e_email    = html.escape(email,    quote=True)
+    e_empresa  = html.escape(empresa,  quote=True)
+    e_caso_uso = html.escape(caso_uso, quote=True)
+    e_mensaje  = html.escape(mensaje,  quote=True)
+
+    # Subject: removemos saltos de línea para evitar header injection en SMTP.
+    subj_name = re.sub(r"[\r\n]+", " ", nombre)[:120] or "sin nombre"
+    subject = f"[Monou.gg] Nueva solicitud de {subj_name}"
     body_text = (
         "Nueva solicitud recibida desde la landing de Monou.gg\n"
         "------------------------------------------------------\n"
@@ -128,13 +215,13 @@ def send_email(payload: dict) -> dict:
   <body style="font-family: Inter, Arial, sans-serif; color:#0B0E14;">
     <h2 style="color:#0d9488;">Nueva solicitud — Monou.gg</h2>
     <table cellpadding="6" style="border-collapse:collapse;">
-      <tr><td><b>Nombre</b></td><td>{nombre}</td></tr>
-      <tr><td><b>Email</b></td><td>{email}</td></tr>
-      <tr><td><b>Empresa</b></td><td>{empresa}</td></tr>
-      <tr><td><b>Caso de uso</b></td><td>{caso_uso}</td></tr>
+      <tr><td><b>Nombre</b></td><td>{e_nombre}</td></tr>
+      <tr><td><b>Email</b></td><td>{e_email}</td></tr>
+      <tr><td><b>Empresa</b></td><td>{e_empresa}</td></tr>
+      <tr><td><b>Caso de uso</b></td><td>{e_caso_uso}</td></tr>
     </table>
     <h3>Mensaje</h3>
-    <p style="white-space:pre-wrap;">{mensaje}</p>
+    <p style="white-space:pre-wrap;">{e_mensaje}</p>
   </body>
 </html>"""
 
@@ -145,8 +232,12 @@ def send_email(payload: dict) -> dict:
         "text": body_text,
         "html": body_html,
     }
-    if email:
-        body["reply_to"] = email
+    # Sanitiza reply_to: sólo si tiene forma de email y no contiene CRLF.
+    # Defensa secundaria contra header injection (Resend ya escapa JSON, pero
+    # mejor no enviarles basura).
+    safe_reply = re.sub(r"[\r\n]+", "", email)
+    if safe_reply and EMAIL_RE.match(safe_reply):
+        body["reply_to"] = safe_reply
 
     req = urllib.request.Request(
         RESEND_ENDPOINT,
@@ -188,46 +279,72 @@ def _client_meta(req):
     """Extrae IP, user-agent y referer del request (respetando X-Forwarded-For)."""
     fwd = req.headers.get("X-Forwarded-For", "")
     ip = (fwd.split(",")[0].strip() if fwd else req.remote_addr) or None
-    return {
-        "ip": ip,
-        "user_agent": req.headers.get("User-Agent"),
-        "referer": req.headers.get("Referer"),
-    }
+    # Trunca user-agent y referer para no almacenar cadenas absurdamente largas
+    ua = (req.headers.get("User-Agent") or "")[:500] or None
+    ref = (req.headers.get("Referer") or "")[:500] or None
+    return {"ip": ip, "user_agent": ua, "referer": ref}
 
 
-@app.route("/api/contact", methods=["POST"])
-def contact():
-    data = request.get_json(silent=True) or request.form.to_dict()
+def _validate_contact_payload(data: dict):
+    """Valida campos del formulario. Devuelve (data_truncada, error_msg)."""
+    if not isinstance(data, dict):
+        return None, "payload inválido"
 
     required = ["nombre", "email"]
     missing = [f for f in required if not (data.get(f) or "").strip()]
     if missing:
-        return jsonify({"ok": False, "error": f"Campos requeridos: {', '.join(missing)}"}), 400
+        return None, f"Campos requeridos: {', '.join(missing)}"
 
-    if (data.get("website") or "").strip():
-        # Honeypot lleno: fingimos éxito sin tocar nada
+    # Trunca cada campo a su límite (truncar es más amable que rechazar; al
+    # mismo tiempo MAX_CONTENT_LENGTH ya bloqueó payloads abusivos).
+    cleaned = {}
+    for field, limit in FIELD_LIMITS.items():
+        v = (data.get(field) or "")
+        if not isinstance(v, str):
+            return None, f"campo '{field}' debe ser texto"
+        cleaned[field] = v.strip()[:limit]
+
+    if not EMAIL_RE.match(cleaned["email"]):
+        return None, "email inválido"
+
+    # Honeypot pasa tal cual
+    cleaned["website"] = (data.get("website") or "").strip()
+    return cleaned, None
+
+
+@app.route("/api/contact", methods=["POST"])
+@limiter.limit("5 per minute; 30 per hour; 100 per day")
+def contact():
+    raw = request.get_json(silent=True) or request.form.to_dict()
+    data, err = _validate_contact_payload(raw)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+
+    if data["website"]:
+        # Honeypot lleno: fingimos éxito sin tocar nada (no logueamos al bot)
         return jsonify({"ok": True}), 200
 
     contact_id = db.insert_contact(data, _client_meta(request))
 
     try:
         send_email(data)
-    except EmailAuthError as exc:
-        app.logger.error("Resend auth: %s", exc)
-        db.mark_status(contact_id, "failed", str(exc))
+    except EmailAuthError:
+        app.logger.error("Resend auth fallida (contact_id=%s)", contact_id)
+        db.mark_status(contact_id, "failed", "auth")
         return jsonify({"ok": False, "error": "Autenticación con el proveedor de correo fallida."}), 500
-    except EmailValidationError as exc:
-        app.logger.error("Resend validation: %s", exc)
-        db.mark_status(contact_id, "failed", str(exc))
+    except EmailValidationError:
+        app.logger.error("Resend validation rechazada (contact_id=%s)", contact_id)
+        db.mark_status(contact_id, "failed", "validation")
         return jsonify({"ok": False, "error": "El proveedor rechazó el correo (verifica dominio o destinatario)."}), 500
     except EmailError as exc:
-        app.logger.error("Resend error: %s", exc)
-        db.mark_status(contact_id, "failed", str(exc))
-        return jsonify({"ok": False, "error": f"Error enviando correo: {exc}"}), 500
-    except Exception as exc:
-        app.logger.exception("Error inesperado enviando correo")
-        db.mark_status(contact_id, "failed", str(exc))
-        return jsonify({"ok": False, "error": f"Error interno: {exc}"}), 500
+        # Sólo loguea la clase del error, no el mensaje (puede contener PII)
+        app.logger.error("Resend error %s (contact_id=%s)", type(exc).__name__, contact_id)
+        db.mark_status(contact_id, "failed", "send_error")
+        return jsonify({"ok": False, "error": "No se pudo enviar el correo."}), 500
+    except Exception:
+        app.logger.exception("Error inesperado enviando correo (contact_id=%s)", contact_id)
+        db.mark_status(contact_id, "failed", "internal")
+        return jsonify({"ok": False, "error": "Error interno."}), 500
 
     db.mark_status(contact_id, "emailed")
     return jsonify({"ok": True, "message": "Correo enviado", "id": contact_id}), 200
@@ -244,10 +361,20 @@ def health():
 
 
 def _is_admin(req) -> bool:
-    """Valida el header Authorization Bearer contra ADMIN_TOKEN."""
+    """Valida el header Authorization Bearer contra ADMIN_TOKEN.
+
+    Usa hmac.compare_digest para evitar timing attacks (la comparación de
+    strings con `==` revela cuántos chars coinciden por la duración de la
+    operación, lo que permite recuperar el token byte a byte).
+    """
     token = os.getenv("ADMIN_TOKEN", "")
+    if not token:
+        return False
     auth = req.headers.get("Authorization", "")
-    return bool(token) and auth == f"Bearer {token}"
+    expected = f"Bearer {token}"
+    # compare_digest necesita strings/bytes de igual tipo y maneja cualquier
+    # longitud sin filtrar info por timing.
+    return hmac.compare_digest(auth, expected)
 
 
 def _unauthorized():
