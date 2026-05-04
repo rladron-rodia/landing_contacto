@@ -64,7 +64,7 @@ git branch -d fix/breve-descripcion
 
 ```bash
 # Health check rápido
-curl -i https://landing-contacto-backend.onrender.com/api/health
+curl -i https://api.monoulabs.ai/api/health
 ```
 
 Debe traer `200 OK` + headers `x-content-type-options: nosniff`,
@@ -162,7 +162,7 @@ Variables actuales en Render:
   verifiques dominio en Resend)
 - `MAIL_TO` — `rladron@gmail.com` (igual al email registrado en Resend hasta
   verificar dominio)
-- `ALLOWED_ORIGIN` — `https://rladron-rodia.github.io`
+- `ALLOWED_ORIGIN` — `https://monoulabs.ai,https://www.monoulabs.ai,https://rladron-rodia.github.io` (legacy GitHub Pages mantenido 30 días)
 - `DATABASE_URL` (auto-injectado por Render)
 
 ---
@@ -194,7 +194,7 @@ Para `RESEND_API_KEY`:
 ```bash
 for i in {1..7}; do
   code=$(curl -s -o /dev/null -w "%{http_code}" \
-    -X POST https://landing-contacto-backend.onrender.com/api/contact \
+    -X POST https://api.monoulabs.ai/api/contact \
     -H "Content-Type: application/json" -d '{}')
   echo "intento $i: $code"
 done

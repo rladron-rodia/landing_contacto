@@ -17,7 +17,7 @@
  *   - <meta name="api-url" content="https://...">  (override explícito)
  *   - window.MONOU_API_URL = "..."                (override en runtime)
  *   - Auto: localhost → http://localhost:5000/api/contact
- *           prod      → https://landing-contacto-backend.onrender.com/api/contact
+ *           prod      → https://api.monoulabs.ai/api/contact
  */
 
 (function () {
@@ -30,7 +30,7 @@
     if (host === "localhost" || host === "127.0.0.1" || host === "") {
       return "http://localhost:5000/api/contact";
     }
-    return "https://landing-contacto-backend.onrender.com/api/contact";
+    return "https://api.monoulabs.ai/api/contact";
   }
   const API_URL = resolveApiUrl();
 
