@@ -9,8 +9,8 @@ Por qué Resend en lugar de SMTP de Gmail:
 Variables de entorno:
   RESEND_API_KEY  -> API key generada en https://resend.com/api-keys
   MAIL_FROM       -> remitente. Ejemplos:
-                       "Monou.gg Landing <onboarding@resend.dev>"  (default sin verificar dominio)
-                       "Monou.gg <contacto@monou.gg>"              (requiere monou.gg verificado en Resend)
+                       "Monou Labs <onboarding@resend.dev>"        (default sin verificar dominio)
+                       "Monou Labs <contacto@monoulabs.ai>"        (requiere monoulabs.ai verificado en Resend)
   MAIL_TO         -> destinatario(s) separados por coma
   ALLOWED_ORIGIN  -> CORS, "*" o lista separada por coma
   DATABASE_URL    -> Postgres (opcional; si falta, no se guardan contactos)
@@ -19,8 +19,8 @@ Variables de entorno:
 Limitación del plan free de Resend SIN dominio verificado:
   - From debe ser onboarding@resend.dev (no puedes usar tu propio dominio)
   - Solo puedes enviar TO el email con el que registraste la cuenta de Resend
-  Para producción real: verifica monou.gg en https://resend.com/domains y
-  cambia MAIL_FROM a contacto@monou.gg (o el alias que prefieras).
+  Para producción real: verifica monoulabs.ai en https://resend.com/domains
+  y cambia MAIL_FROM a contacto@monoulabs.ai (o el alias que prefieras).
 """
 
 import os
@@ -177,7 +177,7 @@ def send_email(payload: dict) -> dict:
         raise EmailError("RESEND_API_KEY no está configurada")
 
     mail_from = os.getenv("MAIL_FROM",
-                          "Monou.gg Landing <onboarding@resend.dev>").strip()
+                          "Monou Labs <onboarding@resend.dev>").strip()
     mail_to_raw = os.getenv("MAIL_TO", "")
     mail_to = [t.strip() for t in mail_to_raw.split(",") if t.strip()]
     if not mail_to:
@@ -200,9 +200,9 @@ def send_email(payload: dict) -> dict:
 
     # Subject: removemos saltos de línea para evitar header injection en SMTP.
     subj_name = re.sub(r"[\r\n]+", " ", nombre)[:120] or "sin nombre"
-    subject = f"[Monou.gg] Nueva solicitud de {subj_name}"
+    subject = f"[Monou Labs] Nueva solicitud de {subj_name}"
     body_text = (
-        "Nueva solicitud recibida desde la landing de Monou.gg\n"
+        "Nueva solicitud recibida desde la landing de Monou Labs\n"
         "------------------------------------------------------\n"
         f"Nombre completo : {nombre}\n"
         f"Email corporativo: {email}\n"
@@ -213,7 +213,7 @@ def send_email(payload: dict) -> dict:
     body_html = f"""\
 <html>
   <body style="font-family: Inter, Arial, sans-serif; color:#0B0E14;">
-    <h2 style="color:#0d9488;">Nueva solicitud — Monou.gg</h2>
+    <h2 style="color:#0d9488;">Nueva solicitud — Monou Labs</h2>
     <table cellpadding="6" style="border-collapse:collapse;">
       <tr><td><b>Nombre</b></td><td>{e_nombre}</td></tr>
       <tr><td><b>Email</b></td><td>{e_email}</td></tr>
