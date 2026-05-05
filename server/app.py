@@ -183,6 +183,14 @@ def send_email(payload: dict) -> dict:
     if not mail_to:
         raise EmailError("MAIL_TO no está configurada")
 
+    # DEBUG TEMPORAL — REMOVER tras diagnosticar el issue de Resend auth.
+    # Loguea solo prefix/suffix y longitud de la key + valores de mail_from/to
+    # para confirmar qué está leyendo Render. NO loguea la key completa.
+    app.logger.info(
+        "[DEBUG] RESEND_API_KEY prefix=%s suffix=%s len=%d | MAIL_FROM=%r | MAIL_TO=%r",
+        api_key[:6], api_key[-4:], len(api_key), mail_from, mail_to_raw,
+    )
+
     nombre   = (payload.get("nombre")   or "").strip()
     email    = (payload.get("email")    or "").strip()
     empresa  = (payload.get("empresa")  or "").strip()
@@ -260,6 +268,11 @@ def send_email(payload: dict) -> dict:
                     return {"raw": raw}
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8", errors="replace")
+            # DEBUG TEMPORAL — REMOVER tras diagnosticar el issue de Resend auth.
+            # Loguea el body completo para ver el motivo exacto del rechazo.
+            app.logger.error(
+                "[DEBUG] Resend HTTP %s body=%r", e.code, err_body,
+            )
             if e.code in (401, 403):
                 raise EmailAuthError(
                     f"Resend rechazó la API key (HTTP {e.code}): {err_body}")
