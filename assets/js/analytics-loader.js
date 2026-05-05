@@ -218,5 +218,28 @@
     window.__monouAnalyticsDebug = true;
   }
 
-  boot();
+  // v2.5.3 — Delay del boot al post-LCP idle.
+  //
+  // PageSpeed Insights penaliza ~63 KiB de gtag.js como "JavaScript no usado
+  // en critical path". El script tiene `defer` pero corre apenas termina el
+  // HTML parse, antes de FCP/LCP. Con requestIdleCallback diferimos el
+  // arranque hasta que el browser esté idle (típicamente post-LCP/post-TTI),
+  // sacando GA4/GTM del critical path sin perder funcionalidad.
+  //
+  // Fallback: si no hay requestIdleCallback (Safari < 16.4) usamos setTimeout
+  // sobre window.load. timeout de 3s garantiza que eventualmente corre incluso
+  // si el browser nunca llega a idle.
+  function deferredBoot() {
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(boot, { timeout: 3000 });
+    } else {
+      setTimeout(boot, 1500);
+    }
+  }
+
+  if (document.readyState === "complete") {
+    deferredBoot();
+  } else {
+    window.addEventListener("load", deferredBoot, { once: true });
+  }
 })();
