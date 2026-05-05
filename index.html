@@ -38,15 +38,26 @@
     <meta name="twitter:site" content="@monoulabs">
     <meta name="twitter:creator" content="@monoulabs">
 
-    <!-- ═══ Performance hints — preconnect (v2.4.3) ═══ -->
-    <!-- S3 sirve imágenes sin CORS (no envía Origin header), preconnect SIN crossorigin. -->
-    <link rel="preconnect" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
+    <!-- ═══ Performance hints — DNS-prefetch only (v2.5.1) ═══
+         Antes había <link rel="preconnect"> a S3 y a api.monoulabs.ai;
+         PageSpeed reportó "preconnect no usado" porque ninguno está en
+         el critical path para LCP:
+           - S3: las imágenes son loading="lazy" (no se piden en paint inicial).
+           - API: solo se llama en submit del formulario (post-LCP).
+         Mantenemos dns-prefetch (cheap, no warning) y soltamos preconnect. -->
     <link rel="dns-prefetch" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
-    <!-- API: los loaders JS hacen fetch() cross-origin sin credentials,
-         por lo tanto el preconnect SÍ debe llevar crossorigin (modo anonymous)
-         para que matchee con la conexión real y no se duplique. -->
-    <link rel="preconnect" href="https://api.monoulabs.ai" crossorigin>
     <link rel="dns-prefetch" href="https://api.monoulabs.ai">
+
+    <!-- ═══ Preload de fuentes críticas LCP (v2.5.1) ═══
+         Inter 400 (body text), 600 (botones del hero) y 700 (H1 hero)
+         están above-the-fold. Sin preload el browser los descubre solo
+         tras parsear el <style> @font-face inline, encadenándolos detrás
+         de tailwind.min.css (Lighthouse: critical chain ~354ms).
+         Con preload arrancan en paralelo al HTML parse y no quedan en
+         serie con Tailwind. -->
+    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-400.woff2" crossorigin>
+    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-600.woff2" crossorigin>
+    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-700.woff2" crossorigin>
 
     <!-- ═══ Theme & mobile hints ═══ -->
     <meta name="theme-color" content="#0B0E14">
