@@ -18,14 +18,26 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       # --- Email (Resend) ---
-      # Sin dominio verificado: usa onboarding@resend.dev
-      # Con monou.gg verificado: cambia a "Monou.gg <contacto@monou.gg>"
+      # MAIL_FROM y MAIL_TO se gestionan ÚNICAMENTE desde el Dashboard de
+      # Render (no se versionan en el blueprint). Razones:
+      #   1. Permiten que el cambio de remitente al verificar dominio
+      #      ('onboarding@resend.dev' -> 'contacto@monoulabs.ai') sea
+      #      operativo, sin requerir un PR.
+      #   2. Evitan que un 'Blueprint Sync' sobrescriba el valor correcto
+      #      con un default obsoleto del repo (causa de incidentes pasados).
+      #   3. MAIL_TO debe coincidir EXACTAMENTE con el email registrado
+      #      en la cuenta Resend mientras no haya dominio verificado;
+      #      mantenerlo aquí riesgoso si la cuenta cambia.
+      # Valores actuales en producción (Render Dashboard -> Environment):
+      #   MAIL_FROM = Monou.gg Landing <onboarding@resend.dev>
+      #              (cambiar a contacto@monoulabs.ai cuando se verifique
+      #              el dominio en Resend)
+      #   MAIL_TO   = rladron@gmail.com
+      #              (= email registrado en la cuenta Resend)
       - key: MAIL_FROM
-        value: "Monou.gg Landing <onboarding@resend.dev>"
-      # En plan free de Resend SIN dominio verificado, MAIL_TO debe ser
-      # el email con el que registraste tu cuenta de Resend.
+        sync: false
       - key: MAIL_TO
-        value: rodrigo.ladron@gmail.com
+        sync: false
       # CORS estricto a tus dominios de producción. Mantenemos el GitHub Pages
       # 30 días tras el cutover por compatibilidad; después se quita.
       - key: ALLOWED_ORIGIN
