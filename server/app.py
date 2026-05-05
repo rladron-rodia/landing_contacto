@@ -184,11 +184,13 @@ def send_email(payload: dict) -> dict:
         raise EmailError("MAIL_TO no está configurada")
 
     # DEBUG TEMPORAL — REMOVER tras diagnosticar el issue de Resend auth.
-    # Loguea solo prefix/suffix y longitud de la key + valores de mail_from/to
-    # para confirmar qué está leyendo Render. NO loguea la key completa.
+    # Nunca loguear secretos ni fragmentos de secretos (API keys, tokens,
+    # etc). Loguea solo SI existe la key + su longitud + los valores de
+    # MAIL_FROM y MAIL_TO (no son sensibles). El motivo exacto del rechazo
+    # se ve en el body de Resend, que se loguea en el except de HTTPError.
     app.logger.info(
-        "[DEBUG] RESEND_API_KEY prefix=%s suffix=%s len=%d | MAIL_FROM=%r | MAIL_TO=%r",
-        api_key[:6], api_key[-4:], len(api_key), mail_from, mail_to_raw,
+        "[DEBUG] RESEND_API_KEY configured=%s len=%d | MAIL_FROM=%r | MAIL_TO=%r",
+        bool(api_key), len(api_key), mail_from, mail_to_raw,
     )
 
     nombre   = (payload.get("nombre")   or "").strip()
