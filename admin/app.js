@@ -20,7 +20,7 @@
     if (host === "localhost" || host === "127.0.0.1" || host === "") {
       return "http://localhost:5000";
     }
-    return "https://landing-contacto-backend.onrender.com";
+    return "https://api.monoulabs.ai";
   })();
   const TOKEN_KEY = "monou_admin_token";
 

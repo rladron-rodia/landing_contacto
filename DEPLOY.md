@@ -1,13 +1,18 @@
-# Despliegue — Monou.gg landing
+# Despliegue — Monou Labs landing
 
-Frontend (HTML estático) → **GitHub Pages**
-Backend (Flask + Resend HTTP API) → **Render**
+Frontend (HTML estático) → **GitHub Pages** (custom domain `monoulabs.ai`)
+Backend (Flask + Resend HTTP API) → **Render** (custom domain `api.monoulabs.ai`)
 Base de datos → **Postgres en Render** (auto-provisionado vía Blueprint)
+DNS → **Route 53** (hosted zone `monoulabs.ai`)
 
 URLs finales:
-- Landing: `https://rladron-rodia.github.io/landing_contacto/`
-- Admin:   `https://rladron-rodia.github.io/landing_contacto/admin/`
-- API:     `https://landing-contacto-backend.onrender.com`
+- Landing: `https://monoulabs.ai/`  (alias: `https://www.monoulabs.ai/`)
+- Admin:   `https://monoulabs.ai/admin/`
+- API:     `https://api.monoulabs.ai`
+
+URLs legacy (mantenidas durante 30 días tras el cutover):
+- Landing legacy: `https://rladron-rodia.github.io/landing_contacto/`
+- API legacy:     `https://landing-contacto-backend.onrender.com`
 
 ## 1. Backend en Render (Blueprint)
 
@@ -44,7 +49,7 @@ Ve a https://resend.com (recomiendo registrarte con `rodrigo.ladron@monou.gg`).
 Tras el primer build, verifica:
 
 ```bash
-curl https://landing-contacto-backend.onrender.com/api/health
+curl https://api.monoulabs.ai/api/health
 # {"db":true,"email_provider":"resend","ok":true,"service":"monou-contact"}
 ```
 
@@ -55,7 +60,7 @@ curl https://landing-contacto-backend.onrender.com/api/health
 
 1. https://github.com/rladron-rodia/landing_contacto/settings/pages
 2. **Source**: `Deploy from a branch` → **Branch**: `main` / `/ (root)` → **Save**
-3. URL final: `https://rladron-rodia.github.io/landing_contacto/`
+3. URL final: `https://monoulabs.ai/` (custom domain configurado en Pages)
 
 GitHub Pages se actualiza automáticamente en cada push a `main` (~1-2 min).
 
@@ -71,7 +76,7 @@ GitHub Pages se actualiza automáticamente en cada push a `main` (~1-2 min).
 
 ## 4. Acceso al admin
 
-`https://rladron-rodia.github.io/landing_contacto/admin/` → pega `ADMIN_TOKEN`.
+`https://monoulabs.ai/admin/` → pega `ADMIN_TOKEN`.
 
 Pestañas disponibles:
 - **Contactos** — envíos del formulario
@@ -98,7 +103,7 @@ Cuando todo esté funcionando, restringe CORS:
 
 ```yaml
 # render.yaml o Render → Environment
-ALLOWED_ORIGIN: https://rladron-rodia.github.io,https://monou.gg
+ALLOWED_ORIGIN: https://monoulabs.ai,https://www.monoulabs.ai
 ```
 
 Y considera:

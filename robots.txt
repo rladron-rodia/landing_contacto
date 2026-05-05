@@ -21,4 +21,4 @@ Crawl-delay: 10
 User-agent: SemrushBot
 Crawl-delay: 10
 
-Sitemap: https://rladron-rodia.github.io/landing_contacto/sitemap.xml
+Sitemap: https://monoulabs.ai/sitemap.xml

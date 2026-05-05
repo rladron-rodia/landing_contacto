@@ -1,14 +1,14 @@
-# Monou.gg — Landing de Desarrolladores
+# Monou Labs — Landing de Desarrolladores
 
-Landing page para Monou.gg con formulario de contacto que envía correos
+Landing page para Monou Labs con formulario de contacto que envía correos
 vía la API HTTP de Resend, persiste contactos en Postgres y tiene un
 dashboard admin para administrar todos los textos, imágenes y enlaces
 del sitio sin tocar código.
 
 URLs en producción:
-- **Landing**: https://rladron-rodia.github.io/landing_contacto/
-- **Admin**:   https://rladron-rodia.github.io/landing_contacto/admin/
-- **API**:     https://landing-contacto-backend.onrender.com
+- **Landing**: https://monoulabs.ai/  (alias: https://www.monoulabs.ai/)
+- **Admin**:   https://monoulabs.ai/admin/
+- **API**:     https://api.monoulabs.ai
 
 ## Estructura
 

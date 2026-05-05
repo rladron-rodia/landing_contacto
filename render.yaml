@@ -26,11 +26,10 @@ services:
       # el email con el que registraste tu cuenta de Resend.
       - key: MAIL_TO
         value: rodrigo.ladron@gmail.com
-      # CORS estricto a tu landing de GitHub Pages. Si más adelante mueves a
-      # un dominio propio, agrégalo separado por coma:
-      #   "https://rladron-rodia.github.io,https://monoulabs.ai,https://www.monoulabs.ai"
+      # CORS estricto a tus dominios de producción. Mantenemos el GitHub Pages
+      # 30 días tras el cutover por compatibilidad; después se quita.
       - key: ALLOWED_ORIGIN
-        value: "https://rladron-rodia.github.io"
+        value: "https://monoulabs.ai,https://www.monoulabs.ai,https://rladron-rodia.github.io"
       # API key de Resend → secret en el dashboard de Render
       - key: RESEND_API_KEY
         sync: false
