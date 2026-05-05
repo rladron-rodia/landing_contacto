@@ -22,8 +22,6 @@
     }
     return "https://api.monoulabs.ai";
   })();
-  const TOKEN_KEY = "monou_admin_token";
-
   // ---------- DOM helpers ----------
   const $  = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -39,9 +37,15 @@
   let currentView   = "contacts";
 
   // ---------- Token ----------
-  const getToken   = () => localStorage.getItem(TOKEN_KEY) || "";
-  const setToken   = (t) => localStorage.setItem(TOKEN_KEY, t);
-  const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+  // Vive solo en memoria del proceso de la pestaña. NO se persiste en
+  // localStorage ni sessionStorage. Trade-off: hay que pegar el token cada
+  // vez que se abre/recarga la pestaña. A cambio, defensa contra XSS futuras:
+  // ningún script malicioso puede leer el token desde storage del browser.
+  // (v2.4.x — security audit recomendación H2)
+  let _adminToken = "";
+  const getToken   = () => _adminToken;
+  const setToken   = (t) => { _adminToken = (t || "").trim(); };
+  const clearToken = () => { _adminToken = ""; };
 
   // ---------- Nav labels personalizables (persisten en localStorage) ----------
   const NAV_LABELS_KEY = "monou_nav_labels";
