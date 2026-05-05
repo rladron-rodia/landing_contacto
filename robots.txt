@@ -1,24 +1,144 @@
-# robots.txt — Monou Labs landing_contacto
-# Última actualización: 2026-04-29
+# robots.txt — Monou Labs landing
+# Última actualización: 2026-05-05
+# Política: indexación abierta para search engines y AI retrieval bots,
+# bloqueado para AI training scrapers y rutas privadas.
 
+# ───────────────────────────────────────────────────────────────────────
+# Default — todos los bots no listados explícitamente abajo
+# ───────────────────────────────────────────────────────────────────────
 User-agent: *
 Allow: /
 Disallow: /server/    # backend Python (app.py, db.py, .env). El JS de cliente vive en /assets/js/
-Disallow: /admin/
+Disallow: /admin/     # dashboard interno protegido por ADMIN_TOKEN
 Disallow: /.git/
 
-# Permitir crawlers de IA / dataset search
+# ───────────────────────────────────────────────────────────────────────
+# Search engines clásicos — indexación normal
+# ───────────────────────────────────────────────────────────────────────
 User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
 Allow: /
 
-# Throttling de bots SEO de scraping agresivo
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+User-agent: Yandex
+Allow: /
+
+# ───────────────────────────────────────────────────────────────────────
+# AI search / retrieval bots — PERMITIDOS
+# Estos bots leen el sitio para responder en tiempo real a preguntas del
+# usuario en ChatGPT Search, Perplexity, Google AI Overviews, etc.
+# Nos interesa que la marca aparezca en sus respuestas.
+# ───────────────────────────────────────────────────────────────────────
+
+# OpenAI — ChatGPT Search (retrieval, no training)
+User-agent: OAI-SearchBot
+Allow: /
+
+# Perplexity — search engine
+User-agent: PerplexityBot
+Allow: /
+
+# Anthropic — Claude search (cuando esté disponible)
+User-agent: Claude-SearchBot
+Allow: /
+
+# Google — AI Overviews (Gemini)
+User-agent: Google-Extended
+Allow: /
+
+# Apple — Siri / Spotlight web search
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Mistral — Le Chat
+User-agent: MistralAI-User
+Allow: /
+
+# ───────────────────────────────────────────────────────────────────────
+# AI training crawlers — DECISIÓN: BLOQUEADOS
+# Estos bots scrapean para entrenar modelos. No aportan tráfico a la web
+# y compiten con el negocio (somos vendedores de training data).
+# ───────────────────────────────────────────────────────────────────────
+
+# OpenAI training data
+User-agent: GPTBot
+Disallow: /
+
+# Anthropic training (web crawler para Claude)
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+# Common Crawl — alimenta a múltiples LLM training pipelines
+User-agent: CCBot
+Disallow: /
+
+# Cohere
+User-agent: cohere-ai
+Disallow: /
+
+# Google AI training (separado de Google Search)
+User-agent: Google-CloudVertexBot
+Disallow: /
+
+# Meta AI training
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: Meta-ExternalFetcher
+Disallow: /
+
+# ByteDance / TikTok AI
+User-agent: Bytespider
+Disallow: /
+
+# Amazon AI training
+User-agent: Amazonbot
+Disallow: /
+
+# Diffbot — comercializa datos para LLM training
+User-agent: Diffbot
+Disallow: /
+
+# Omgili / webz.io
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: Omgili
+Disallow: /
+
+# ───────────────────────────────────────────────────────────────────────
+# SEO / scraping agresivos — throttle (no bloqueamos del todo, son útiles
+# para análisis de la propia marca, pero limitamos rate)
+# ───────────────────────────────────────────────────────────────────────
 User-agent: AhrefsBot
 Crawl-delay: 10
 
 User-agent: SemrushBot
 Crawl-delay: 10
 
+User-agent: MJ12bot
+Crawl-delay: 30
+
+User-agent: DotBot
+Crawl-delay: 30
+
+# ───────────────────────────────────────────────────────────────────────
+# Sitemap
+# ───────────────────────────────────────────────────────────────────────
 Sitemap: https://monoulabs.ai/sitemap.xml
