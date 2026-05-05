@@ -158,11 +158,10 @@ Para cambios de variables de entorno en producción:
 Variables actuales en Render:
 - `RESEND_API_KEY` (secret) — rotar cada 90 días
 - `ADMIN_TOKEN` (secret) — rotar cada 90 días
-- `MAIL_FROM` — `Monou.gg Landing <onboarding@resend.dev>` (cambiar cuando
-  verifiques dominio en Resend)
-- `MAIL_TO` — `rladron@gmail.com` (igual al email registrado en Resend hasta
-  verificar dominio)
-- `ALLOWED_ORIGIN` — `https://monoulabs.ai,https://www.monoulabs.ai,https://rladron-rodia.github.io` (legacy GitHub Pages mantenido 30 días)
+- `MAIL_FROM` — `Monou Labs <contacto@monoulabs.ai>` (dominio verificado en Resend)
+- `MAIL_TO` — `rodrigo.ladron@monou.gg,rladron@gmail.com` (dual recipient para
+  redundancia: primario en Google Workspace de monou.gg + backup en gmail)
+- `ALLOWED_ORIGIN` — `https://monoulabs.ai,https://www.monoulabs.ai,https://rladron-rodia.github.io`
 - `DATABASE_URL` (auto-injectado por Render)
 
 ---
@@ -205,6 +204,93 @@ Esperado: primeros 5 dan `400` (campos requeridos), 6º y 7º dan `429`
 
 ---
 
+## Cloudflare edge layer (desde v2.5.0)
+
+El frontend de `monoulabs.ai` está detrás de **Cloudflare como proxy**. Esto
+agrega una capa de cache, compression, WAF y headers de seguridad sin tocar
+GitHub Pages.
+
+### Arquitectura actual
+
+```
+Usuario → Cloudflare edge (proxied) → GitHub Pages (origin frontend)
+                                    → Render (api, DNS-only sin proxy)
+```
+
+### Configuración activa (panel Cloudflare → monoulabs.ai)
+
+- **DNS**: nameservers `adaline.ns.cloudflare.com` + `ezra.ns.cloudflare.com`
+  (cambiados desde Route 53 en AWS Domain Registrar)
+- **DNS records proxiados (orange cloud)**: 4 A apex + CNAME www
+- **DNS records DNS-only (gray cloud)**: api, MX/TXT (Resend, Google site verification, DKIM, SPF, DMARC)
+- **SSL/TLS mode**: Full (strict)
+- **Always Use HTTPS**: ON
+- **Automatic HTTPS Rewrites**: ON
+- **HSTS**: max-age 6 meses, includeSubDomains, sin preload
+- **Brotli + HTTP/3**: automático (Free tier)
+- **Cache Rules**:
+  - `Cache assets 1 year` — URI Path starts with `/assets/` → 1 año edge + browser
+  - `Cache fonts 1 year` — URI Path wildcard `*.woff2` → 1 año edge + browser
+- **AI Crawl Control**: Block AI training bots ON
+- **WAF managed rules**: activo (Free tier)
+
+### Flujo si necesitas invalidar cache
+
+Cuando hagas un cambio que requiera servirse fresh ya (no esperar al TTL de
+1 año):
+
+1. Cloudflare dashboard → `monoulabs.ai` → **Caching** → **Configuration**
+2. Sección **Purge Cache** → opción **Custom Purge** (más quirúrgico) o
+   **Purge Everything** (nuclear)
+3. Custom: pega URLs específicas (ej. `https://monoulabs.ai/index.html`)
+4. Confirma → cache se borra inmediatamente en todos los POPs
+
+> **Tip**: para `index.html` y archivos sin hash, considera invalidar tras
+> cada deploy. Para los assets en `/assets/` que tienen contenido immutable,
+> el TTL de 1 año está bien — si cambian, también cambia el hash en el HTML
+> que los referencia (lo cual no aplica aquí porque no usas build, pero sí
+> en futuro con CloudFront+webpack).
+
+### Si necesitas pausar Cloudflare (emergencia)
+
+1. Dashboard → `monoulabs.ai` → barra lateral derecha → **Advanced Actions**
+2. Click **Pause Cloudflare on Site**
+3. Cloudflare bypassea proxy → tráfico va directo a GitHub Pages / Render
+4. Para reactivar: mismo botón cambia a **Re-enable Cloudflare**
+
+> **Cuándo usarlo**: si Cloudflare está mostrando un error o cache stale
+> imposible de invalidar y necesitas debuggear contra el origen directo.
+
+### Verificación post-cambio
+
+Tras cualquier cambio en config Cloudflare:
+
+```bash
+# 1. Site responde con cf-ray header (Cloudflare delante)
+curl -sI https://monoulabs.ai/ | grep -iE "server|cf-ray"
+
+# 2. Brotli activo
+curl -sIH "Accept-Encoding: br" https://monoulabs.ai/ | grep -i "content-encoding"
+
+# 3. HSTS activo
+curl -sI https://monoulabs.ai/ | grep -i "strict-transport-security"
+
+# 4. Cache TTL en assets
+curl -sI https://monoulabs.ai/assets/css/tailwind.min.css | grep -iE "cache-control|cf-cache-status"
+
+# 5. HTTP→HTTPS redirect
+curl -sI http://monoulabs.ai/ | grep -iE "HTTP/|location"
+```
+
+Esperado:
+- `server: cloudflare` + `cf-ray: ...`
+- `content-encoding: br`
+- `strict-transport-security: max-age=15552000; includeSubDomains`
+- `cache-control: public, max-age=31536000` + `cf-cache-status: HIT`
+- `301 Moved Permanently` + `Location: https://...`
+
+---
+
 ## Quick reference — comandos más usados
 
 ```bash
@@ -233,4 +319,6 @@ git reset --hard origin/main
 
 ## Última actualización
 
-2026-04-30 — creación inicial tras paso a `main` protegido con CodeQL gate.
+- 2026-04-30 — creación inicial tras paso a `main` protegido con CodeQL gate.
+- 2026-05-05 (v2.5.0) — sección Cloudflare edge layer agregada. Variables
+  Render actualizadas con MAIL_FROM/MAIL_TO post verificación de dominio.
