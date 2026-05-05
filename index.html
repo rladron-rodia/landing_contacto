@@ -20,6 +20,8 @@
     <meta property="og:title" content="Gameplay Datasets para IA y World Models | Monou Labs">
     <meta property="og:description" content="+10K horas de gameplay curado para entrenar agentes de IA. Datasets para Reinforcement Learning y Behavior Cloning con telemetría completa.">
     <meta property="og:image" content="https://monoulabs.ai/og-preview.png">
+    <meta property="og:image:secure_url" content="https://monoulabs.ai/og-preview.png">
+    <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Monou Labs — Gameplay Datasets para entrenar agentes de IA">
@@ -32,6 +34,9 @@
     <meta name="twitter:title" content="Gameplay Datasets for AI Training | Monou Labs">
     <meta name="twitter:description" content="+10K hours of curated gameplay data for training AI agents. Datasets for RL, Behavior Cloning, World Models.">
     <meta name="twitter:image" content="https://monoulabs.ai/og-preview.png">
+    <meta name="twitter:image:alt" content="Monou Labs — Gameplay Datasets para entrenar agentes de IA">
+    <meta name="twitter:site" content="@monoulabs">
+    <meta name="twitter:creator" content="@monoulabs">
 
     <!-- ═══ Performance hints (v2.1.5) — preconnect con crossorigin (PageSpeed) ═══ -->
     <link rel="preconnect" href="https://muestra-imagen.s3.us-east-1.amazonaws.com" crossorigin>
@@ -49,6 +54,7 @@
     <meta name="application-name" content="Monou Labs">
     <meta name="apple-mobile-web-app-title" content="Monou Labs">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
@@ -84,13 +90,24 @@
         "email": "contacto@monoulabs.ai"
       },
       "distribution": [
-        { "@type": "DataDownload", "encodingFormat": "JSON/JSONL", "contentUrl": "https://monoulabs.ai/#contacto" },
-        { "@type": "DataDownload", "encodingFormat": "API REST", "contentUrl": "https://monoulabs.ai/#contacto" }
+        { "@type": "DataDownload", "encodingFormat": "application/json", "contentUrl": "https://monoulabs.ai/#contacto" },
+        { "@type": "DataDownload", "encodingFormat": "application/x-ndjson", "contentUrl": "https://monoulabs.ai/#contacto" },
+        { "@type": "DataDownload", "encodingFormat": "application/octet-stream", "contentUrl": "https://monoulabs.ai/#contacto" }
       ],
       "measurementTechnique": "Automated gameplay recording, annotation and segmentation",
-      "variableMeasured": "Player actions, game states, rewards, visual frames",
+      "variableMeasured": ["Player actions", "Game states", "Rewards", "Visual frames", "Input telemetry", "Match segmentation"],
       "temporalCoverage": "2024/..",
-      "spatialCoverage": "Global"
+      "spatialCoverage": "Global",
+      "isAccessibleForFree": false,
+      "license": "https://monoulabs.ai/#data-licenses",
+      "version": "2.0",
+      "datePublished": "2024-01-01",
+      "dateModified": "2026-05-05",
+      "includedInDataCatalog": {
+        "@type": "DataCatalog",
+        "name": "Monou Labs Gameplay Datasets",
+        "url": "https://monoulabs.ai/"
+      }
     }
     </script>
 
@@ -99,20 +116,36 @@
     {
       "@context": "https://schema.org",
       "@type": "Organization",
+      "@id": "https://monoulabs.ai/#organization",
       "name": "Monou Labs",
       "alternateName": ["monoulabs.ai", "Monou.gg"],
       "url": "https://monoulabs.ai/",
-      "logo": "https://monoulabs.ai/og-preview.png",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://monoulabs.ai/og-preview.png",
+        "width": 1200,
+        "height": 630
+      },
+      "image": "https://monoulabs.ai/og-preview.png",
       "description": "Gameplay datasets para entrenamiento de IA — World Models, Reinforcement Learning y Behavior Cloning",
+      "knowsAbout": [
+        "Gameplay datasets",
+        "Reinforcement Learning",
+        "Behavior Cloning",
+        "World Models",
+        "AI training data",
+        "Game telemetry"
+      ],
       "sameAs": [
         "https://monoulabs.ai/"
       ],
-      "contactPoint": {
+      "contactPoint": [{
         "@type": "ContactPoint",
         "email": "contacto@monoulabs.ai",
         "contactType": "sales",
-        "availableLanguage": ["Spanish", "English"]
-      }
+        "availableLanguage": ["Spanish", "English"],
+        "areaServed": "Worldwide"
+      }]
     }
     </script>
 
@@ -121,13 +154,10 @@
     {
       "@context": "https://schema.org",
       "@type": "Service",
+      "@id": "https://monoulabs.ai/#service",
       "serviceType": "AI Training Dataset",
       "name": "Gameplay Datasets para entrenamiento de IA",
-      "provider": {
-        "@type": "Organization",
-        "name": "Monou Labs",
-        "url": "https://monoulabs.ai/"
-      },
+      "provider": { "@id": "https://monoulabs.ai/#organization" },
       "areaServed": "Worldwide",
       "audience": {
         "@type": "BusinessAudience",
@@ -137,8 +167,15 @@
       "offers": {
         "@type": "Offer",
         "url": "https://monoulabs.ai/#contacto",
-        "availability": "https://schema.org/InStock"
-      }
+        "availability": "https://schema.org/InStock",
+        "priceSpecification": {
+          "@type": "PriceSpecification",
+          "priceCurrency": "USD",
+          "description": "Pricing on request — contact sales for custom dataset packages"
+        }
+      },
+      "category": "Data as a Service (DaaS)",
+      "termsOfService": "https://monoulabs.ai/#privacy"
     }
     </script>
 

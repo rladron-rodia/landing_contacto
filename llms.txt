@@ -1,0 +1,58 @@
+# Monou Labs
+
+> Gameplay datasets para entrenamiento de IA. +10K horas de gameplay
+> capturado, curado y etiquetado para Reinforcement Learning, Behavior
+> Cloning y World Models. Cobertura de juegos F2P propios y catálogo de
+> títulos AAA de publishers.
+
+Monou Labs es una empresa B2B que provee datasets de gameplay a equipos
+de Machine Learning, RL Researchers y AI Labs que entrenan agentes
+visuales y modelos del mundo. La oferta combina captura propia (juegos
+F2P de Monou) con cobertura de juegos AAA populares (Minecraft, Clash
+Royale, Brawl Stars, Roblox, +40 títulos en catálogo).
+
+Cada dataset incluye eventos de gameplay detectados, timestamps de
+acciones clave, segmentación por partidas y vídeo a 1080p / 60fps.
+Entrega por AWS S3, Google Cloud Storage, Azure Blob, o API REST con
+filtros y streaming.
+
+## Páginas principales
+
+- [Landing principal](https://monoulabs.ai/): propuesta de valor, métricas del dataset, juegos cubiertos, formato y entrega, formulario de contacto.
+
+## Secciones de la landing
+
+- [Métricas del dataset](https://monoulabs.ai/#metricas): cifras agregadas — horas de captura, videos indexados, juegos cubiertos.
+- [Dataset Intelligence](https://monoulabs.ai/#dataset-intelligence): detalle de qué se captura — visual capture, metadata disponible, volumen actual.
+- [Juegos F2P propios](https://monoulabs.ai/#juegos-monou): catálogo de juegos F2P desarrollados por Monou con datasets de gameplay propio.
+- [Juegos de Publishers (AAA)](https://monoulabs.ai/#juegos-terceros): cobertura de títulos AAA populares de terceros.
+- [Formato y entrega](https://monoulabs.ai/#formato-entrega): JSON/JSONL, formatos custom, S3, GCS, Azure Blob, API REST.
+- [Contacto](https://monoulabs.ai/#contacto): formulario para solicitar acceso al dataset.
+
+## Para quién
+
+- ML Engineers entrenando agentes visuales
+- RL Researchers evaluando políticas en entornos de juego
+- Equipos de IA construyendo World Models
+- Empresas que necesitan datos de gameplay etiquetados para Behavior Cloning
+
+## Cómo se entrega
+
+- AWS S3 / Google Cloud Storage / Azure Blob: acceso controlado y versionado
+- API REST: acceso programático con filtros, paginación y streaming
+- Formatos: JSON / JSONL como default; custom según requerimiento
+
+## Idiomas
+
+- Español (`es`) — idioma principal
+- Inglés (`en`) — toggle UX en la misma página, mismo contenido
+
+## Contacto
+
+- Web: https://monoulabs.ai/#contacto
+- Email: contacto@monoulabs.ai
+
+## Optional
+
+- [Términos de privacidad](https://monoulabs.ai/#privacy)
+- [Licencias de datos](https://monoulabs.ai/#data-licenses)
