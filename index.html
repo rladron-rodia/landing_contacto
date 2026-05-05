@@ -38,13 +38,14 @@
     <meta name="twitter:site" content="@monoulabs">
     <meta name="twitter:creator" content="@monoulabs">
 
-    <!-- ═══ Performance hints — preconnect (v2.4.2 — fix crossorigin issue de PageSpeed) ═══ -->
-    <!-- S3 sirve imágenes sin CORS headers, así que NO usamos crossorigin
-         (Lighthouse reportaba "preconnect sin usar" por el mismatch). -->
+    <!-- ═══ Performance hints — preconnect (v2.4.3) ═══ -->
+    <!-- S3 sirve imágenes sin CORS (no envía Origin header), preconnect SIN crossorigin. -->
     <link rel="preconnect" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
     <link rel="dns-prefetch" href="https://muestra-imagen.s3.us-east-1.amazonaws.com">
-    <!-- API: fetch sin credentials, también sin crossorigin en preconnect. -->
-    <link rel="preconnect" href="https://api.monoulabs.ai">
+    <!-- API: los loaders JS hacen fetch() cross-origin sin credentials,
+         por lo tanto el preconnect SÍ debe llevar crossorigin (modo anonymous)
+         para que matchee con la conexión real y no se duplique. -->
+    <link rel="preconnect" href="https://api.monoulabs.ai" crossorigin>
     <link rel="dns-prefetch" href="https://api.monoulabs.ai">
 
     <!-- ═══ Theme & mobile hints ═══ -->
@@ -210,12 +211,16 @@
       [hidden]{display:none}
     </style>
 
-    <!-- ═══ CSS / fonts / scripts (v2.4.2 — async load no-bloqueante para PageSpeed) ═══ -->
-    <!-- Tailwind compilado estático (25 KB). Carga async via preload+onload pattern.
-         El <noscript> fallback asegura cargar también si JS está deshabilitado. -->
-    <link rel="preload" href="assets/css/tailwind.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="assets/css/tailwind.min.css"></noscript>
-    <!-- FontAwesome subset (16 KB). Igual: async + noscript fallback. -->
+    <!-- ═══ CSS / fonts / scripts (v2.4.3) ═══ -->
+    <!-- Tailwind compilado estático (25 KB) — carga SÍNCRONA porque define el
+         layout (flex, grid, spacing). Cargarlo async causaba CLS masivo (0.76)
+         porque el HTML se pintaba antes con clases pt-32, gap-32, etc. sin
+         efecto, y al llegar Tailwind se reposicionaba todo. v2.4.2 intentó
+         async; v2.4.3 revierte a sync para CLS < 0.1. -->
+    <link rel="stylesheet" href="assets/css/tailwind.min.css">
+    <!-- FontAwesome subset (16 KB) — async OK porque los iconos no son
+         layout-critical (parpadean brevemente en cuadritos hasta que carga,
+         pero no reposicionan otros elementos). -->
     <link rel="preload" href="assets/css/fa-subset.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="assets/css/fa-subset.min.css"></noscript>
     <!-- Preload de los woff2 críticos de FontAwesome (regular + solid).
