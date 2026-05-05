@@ -1,11 +1,15 @@
 # Procedimientos de rollback — Cutover a `monoulabs.ai`
 
-Este documento cubre cómo revertir el cutover si algo se rompe.
+Este documento cubre cómo revertir cambios si algo se rompe.
 
-> **Última versión estable PRE-cutover**: `v2.3.0` (commit `c52d84b`).
-> Render + GitHub Pages aún saben servir esa versión sin problemas.
-> Mientras los servicios viejos sigan vivos (legacy `rladron-rodia.github.io`
-> y `landing-contacto-backend.onrender.com`), el rollback es minutos.
+> **Anclajes de versión estable**:
+> - **`v2.5.0`** (commit `d897a7f`) — actual, con Cloudflare edge.
+> - **`v2.4.1`** (commit `6ee90ab`) — security hardening, sin Cloudflare.
+> - **`v2.4.0`** (commit `623fe27`) — primer release con custom domain.
+> - **`v2.3.0`** (commit `c52d84b`) — pre-cutover (URLs legacy).
+>
+> Los servicios viejos (`rladron-rodia.github.io`, `landing-contacto-backend.onrender.com`)
+> siguen vivos como fallback. Cualquier rollback es minutos.
 
 ---
 
@@ -18,6 +22,7 @@ Este documento cubre cómo revertir el cutover si algo se rompe.
 | Correos no llegan | [C — Email](#c--email-no-llega) |
 | Algo en el código rompió producción | [D — Código](#d--rollback-completo-del-codigo) |
 | DNS no resuelve / propagación tarda | [E — DNS](#e--dns) |
+| **Cloudflare devuelve error / cache stale** | [G — Cloudflare](#g--cloudflare-devuelve-error-o-cache-stale) |
 | Pánico generalizado, todo está mal | [F — Rollback total](#f--rollback-total) |
 
 ---
@@ -277,6 +282,110 @@ ellos. Pero si quieres limpieza total, borra los 3 grupos de records
 
 Si verificaste el dominio en Resend, déjalo. No hace daño y te ahorra
 volver a hacerlo en el siguiente intento.
+
+---
+
+## G — Cloudflare devuelve error o cache stale
+
+Aplica si tu sitio carga raro DESPUÉS de un cambio reciente. Cloudflare
+está delante de tu frontend desde v2.5.0.
+
+### Síntomas comunes
+
+- Sitio muestra contenido viejo aunque ya hiciste deploy nuevo
+- Cloudflare error pages: 521, 522, 523, 524, 525, 526
+- "This site can't provide a secure connection" (cert issue tras cambio)
+- HSTS bloqueando que pruebes en HTTP plano
+
+### G.1 Invalidar cache de Cloudflare (lo más común)
+
+Tras un push a main, GitHub Pages redeploya pero Cloudflare puede seguir
+sirviendo HTML cacheado por hasta 1 año (en el caso de assets) o hasta el
+TTL del HTML.
+
+**Quirúrgico** (recomendado):
+
+1. Cloudflare dashboard → `monoulabs.ai` → **Caching** → **Configuration**
+2. Scroll a **Purge Cache** → click **Custom Purge**
+3. Pega URLs específicas:
+   ```
+   https://monoulabs.ai/
+   https://monoulabs.ai/index.html
+   ```
+4. **Purge** → cache se borra inmediatamente en todos los POPs globales
+
+**Nuclear** (si urge y no sabes qué URL):
+
+1. Mismo lugar → click **Purge Everything**
+2. Confirma
+
+### G.2 Pausar Cloudflare (bypass total)
+
+Si Cloudflare está mostrando error y necesitas verificar contra el origen
+directo:
+
+1. Dashboard → `monoulabs.ai` → barra lateral derecha → **Advanced Actions**
+2. Click **Pause Cloudflare on Site**
+3. Cloudflare bypassea el proxy → tráfico va directo a GitHub Pages
+4. Verifica que el origen está bien (curl directo)
+5. Para reactivar: mismo botón cambia a **Re-enable Cloudflare**
+
+> Pausar Cloudflare quita: cache, Brotli, HTTP/3, WAF, headers HSTS,
+> etc. Es bypass completo. Usar SOLO para debugging — no como state final.
+
+### G.3 SSL/TLS error tras cambio
+
+Si tras cambiar config de SSL/TLS sale error de cert:
+
+1. Dashboard → **SSL/TLS** → **Overview**
+2. Verifica que el modo es **Full (strict)**
+3. Si lo subiste a "Strict" o pusiste otro modo y rompió: vuelve a Full (strict)
+4. Espera 1-2 min para propagación edge
+
+### G.4 HSTS bloqueando pruebas en HTTP
+
+HSTS forzó tu browser a HTTPS por 6 meses. Si necesitas probar HTTP plano
+(raro), tienes que limpiar HSTS de tu browser:
+
+**Chrome / Edge**:
+1. Visita `chrome://net-internals/#hsts`
+2. En "Delete domain security policies" → escribe `monoulabs.ai` → Delete
+3. Cierra y reabre la pestaña
+
+**Firefox**:
+1. Cierra todas las pestañas de monoulabs.ai
+2. About:preferences → Privacy → Cookies and Site Data → Manage Data → busca monoulabs.ai → Remove
+
+> Esto sólo limpia HSTS de tu browser local. El header sigue activo en
+> Cloudflare. Para deshabilitar HSTS server-side, ver G.5.
+
+### G.5 Deshabilitar HSTS server-side (irreversible-ish)
+
+⚠️ HSTS está en max-age 6 meses. Si lo desactivas, los browsers que YA
+recibieron el header lo siguen respetando hasta que expire (6 meses).
+NO hay forma de "borrar" HSTS retroactivamente — sólo expira con tiempo.
+
+Para desactivar futuras emisiones del header:
+
+1. Cloudflare dashboard → **SSL/TLS** → **Edge Certificates**
+2. Scroll a **HSTS** → click **Disable HSTS**
+3. Confirma
+
+> Sólo úsalo si tienes un plan claro y aceptas que durante 6 meses los
+> browsers ya cacheados van a seguir forzando HTTPS.
+
+### G.6 Errores 5XX específicos de Cloudflare
+
+| Error | Significado | Acción |
+|---|---|---|
+| **521** | Web server is down | Verifica que GitHub Pages / Render esté arriba |
+| **522** | Connection timed out | Origen lento, considera Pause Cloudflare temporalmente |
+| **523** | Origin is unreachable | DNS de origen mal — revisar Cloudflare DNS records |
+| **524** | A timeout occurred | Origen tarda >100s en responder. Optimiza. |
+| **525** | SSL handshake failed | Cert del origen inválido — revisa Full (strict) en SSL/TLS |
+| **526** | Invalid SSL certificate | Cert del origen expirado o no confiable |
+
+Diagnostico rápido: `curl -sI https://monoulabs.ai/ | head -5` directo.
 
 ---
 
