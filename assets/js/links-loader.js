@@ -40,22 +40,44 @@
 
   function updateLinkContainer(container, link) {
     // 1. Imagen — busca elemento con data-link-field="image" o un <i> dentro
+    //
+    // v2.7.0: si link.image_webp_url existe, montamos <picture> con WebP source
+    // + PNG fallback. Si solo hay PNG (legacy), montamos <img> simple.
     if (link.image_url) {
+      const altText = link.label_es || link.label_en || link.key || "";
       let imgEl = container.querySelector('[data-link-field="image"]');
-      if (!imgEl) {
-        // Buscar contenedor candidato: aspect-* div con un <i> dentro
-        const iconHost = container.querySelector('.aspect-square, .aspect-video, [class*="aspect"], [class*="rounded-2xl"]:has(i.fa-solid)');
-        if (iconHost) {
+      const iconHost = container.querySelector('.aspect-square, .aspect-video, [class*="aspect"], [class*="rounded-2xl"]:has(i.fa-solid)');
+
+      if (link.image_webp_url && iconHost) {
+        // Render con <picture>
+        iconHost.innerHTML = "";
+        const pic = document.createElement("picture");
+        const source = document.createElement("source");
+        source.setAttribute("srcset", link.image_webp_url);
+        source.setAttribute("type", "image/webp");
+        pic.appendChild(source);
+        imgEl = document.createElement("img");
+        imgEl.setAttribute("data-link-field", "image");
+        imgEl.setAttribute("src", link.image_url);
+        imgEl.setAttribute("alt", altText);
+        imgEl.setAttribute("loading", "lazy");
+        imgEl.setAttribute("decoding", "async");
+        imgEl.className = "w-full h-full object-cover rounded-2xl";
+        pic.appendChild(imgEl);
+        iconHost.appendChild(pic);
+      } else {
+        // Legacy: <img> simple
+        if (!imgEl && iconHost) {
           iconHost.innerHTML = "";
           imgEl = document.createElement("img");
           imgEl.setAttribute("data-link-field", "image");
           imgEl.className = "w-full h-full object-cover rounded-2xl";
           iconHost.appendChild(imgEl);
         }
-      }
-      if (imgEl) {
-        imgEl.setAttribute("src", link.image_url);
-        imgEl.setAttribute("alt", link.label_es || link.label_en || link.key || "");
+        if (imgEl) {
+          imgEl.setAttribute("src", link.image_url);
+          imgEl.setAttribute("alt", altText);
+        }
       }
     }
 

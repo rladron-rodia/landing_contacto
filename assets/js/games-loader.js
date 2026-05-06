@@ -85,21 +85,45 @@
     // Image — algunas cards solo tienen un <i> icon, sin <img>. Si llega
     // una image_url y no hay <img> aún, lo creamos dentro del contenedor
     // aspect-video o aspect-square (Publishers usa cuadrado).
+    //
+    // v2.7.0: si game.image_webp_url existe, montamos un <picture> con
+    // <source type="image/webp"> + <img> fallback PNG. Si solo hay PNG
+    // (data legacy), montamos <img> simple como antes (backwards compat).
     if (game.image_url) {
+      const altText = game.title_es || game.title_en || game.title || "";
+      const container = card.querySelector('.aspect-video, .aspect-square');
       let imgEl = card.querySelector('[data-game-field="image"]');
-      if (!imgEl) {
-        const container = card.querySelector('.aspect-video, .aspect-square');
-        if (container) {
+
+      if (game.image_webp_url && container) {
+        // Render con <picture> (WebP source + PNG fallback en <img>)
+        container.innerHTML = "";
+        const pic = document.createElement("picture");
+        const source = document.createElement("source");
+        source.setAttribute("srcset", game.image_webp_url);
+        source.setAttribute("type", "image/webp");
+        pic.appendChild(source);
+        imgEl = document.createElement("img");
+        imgEl.setAttribute("data-game-field", "image");
+        imgEl.setAttribute("src", game.image_url);
+        imgEl.setAttribute("alt", altText);
+        imgEl.setAttribute("loading", "lazy");
+        imgEl.setAttribute("decoding", "async");
+        imgEl.className = "w-full h-full object-cover";
+        pic.appendChild(imgEl);
+        container.appendChild(pic);
+      } else {
+        // Legacy: <img> simple (data sin WebP)
+        if (!imgEl && container) {
           container.innerHTML = "";
           imgEl = document.createElement("img");
           imgEl.setAttribute("data-game-field", "image");
           imgEl.className = "w-full h-full object-cover";
           container.appendChild(imgEl);
         }
-      }
-      if (imgEl) {
-        imgEl.setAttribute("src", game.image_url);
-        imgEl.setAttribute("alt", game.title_es || game.title_en || game.title || "");
+        if (imgEl) {
+          imgEl.setAttribute("src", game.image_url);
+          imgEl.setAttribute("alt", altText);
+        }
       }
     }
 
