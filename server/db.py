@@ -135,6 +135,10 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS title_es TEXT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS title_en TEXT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS link_url TEXT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'f2p';
+-- v2.7.0: image_webp_url para soportar <picture> con WebP fallback en frontend.
+-- NULL en filas existentes → frontend renderiza <img> simple (backwards compat).
+ALTER TABLE games ADD COLUMN IF NOT EXISTS image_webp_url TEXT;
+ALTER TABLE site_links ADD COLUMN IF NOT EXISTS image_webp_url TEXT;
 -- Backfill: si title_es está vacío en filas existentes, copiar desde title
 UPDATE games SET title_es = title WHERE title_es IS NULL AND title IS NOT NULL;
 UPDATE games SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL;
@@ -652,7 +656,8 @@ def list_games(include_meta: bool = False, category: str = None) -> list:
             {"slug": s, "title": t, "title_es": tes_, "title_en": ten_,
              "description_es": de, "description_en": den,
              "tags_es": list(tags_es), "tags_en": list(tags_en),
-             "image_url": img, "link_url": lnk, "category": cat,
+             "image_url": img, "image_webp_url": None,  # seed legacy: solo PNG
+             "link_url": lnk, "category": cat,
              "display_order": ord_}
             for (s, t, tes_, ten_, de, den, tags_es, tags_en, img, lnk, cat, ord_) in GAMES_SEED
         ]
@@ -661,7 +666,8 @@ def list_games(include_meta: bool = False, category: str = None) -> list:
         return rows
     cols = ("slug, title, title_es, title_en, "
             "description_es, description_en, "
-            "tags_es, tags_en, image_url, link_url, category, display_order")
+            "tags_es, tags_en, image_url, image_webp_url, "
+            "link_url, category, display_order")
     if include_meta:
         cols += ", updated_at"
     with conn() as c, c.cursor() as cur:
@@ -709,7 +715,8 @@ def upsert_game(payload: dict) -> dict:
     desc_en = (payload.get("description_en") or "").strip() or None
     tags_es = _list(payload.get("tags_es"))
     tags_en = _list(payload.get("tags_en"))
-    image_url = (payload.get("image_url") or "").strip() or None
+    image_url      = (payload.get("image_url") or "").strip() or None
+    image_webp_url = (payload.get("image_webp_url") or "").strip() or None  # v2.7.0
     link_url  = (payload.get("link_url")  or "").strip() or None
     category = (payload.get("category") or "f2p").strip().lower()
     if category not in ("f2p", "publishers"):
@@ -724,9 +731,9 @@ def upsert_game(payload: dict) -> dict:
             """
             INSERT INTO games (slug, title, title_es, title_en,
                                description_es, description_en,
-                               tags_es, tags_en, image_url, link_url,
-                               category, display_order, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                               tags_es, tags_en, image_url, image_webp_url,
+                               link_url, category, display_order, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (slug) DO UPDATE SET
                 title = EXCLUDED.title,
                 title_es = EXCLUDED.title_es,
@@ -736,17 +743,19 @@ def upsert_game(payload: dict) -> dict:
                 tags_es = EXCLUDED.tags_es,
                 tags_en = EXCLUDED.tags_en,
                 image_url = EXCLUDED.image_url,
+                image_webp_url = EXCLUDED.image_webp_url,
                 link_url = EXCLUDED.link_url,
                 category = EXCLUDED.category,
                 display_order = EXCLUDED.display_order,
                 updated_at = NOW()
             RETURNING slug, title, title_es, title_en,
                       description_es, description_en,
-                      tags_es, tags_en, image_url, link_url,
+                      tags_es, tags_en, image_url, image_webp_url, link_url,
                       category, display_order, updated_at
             """,
             (slug, title, title_es, title_en, desc_es, desc_en,
-             tags_es, tags_en, image_url, link_url, category, display_order),
+             tags_es, tags_en, image_url, image_webp_url, link_url,
+             category, display_order),
         )
         row = cur.fetchone()
         if row and row.get("updated_at"):
@@ -773,10 +782,12 @@ def list_site_links(include_meta: bool = False) -> list:
     if not is_enabled():
         return [
             {"key": k, "description": d, "url": u, "image_url": img,
+             "image_webp_url": None,  # seed legacy: solo PNG
              "label_es": le, "label_en": len_, "display_order": ord_}
             for (k, d, u, img, le, len_, ord_) in SITE_LINKS_SEED
         ]
-    cols = "key, description, url, image_url, label_es, label_en, display_order"
+    cols = ("key, description, url, image_url, image_webp_url, "
+            "label_es, label_en, display_order")
     if include_meta:
         cols += ", updated_at"
     with conn() as c, c.cursor() as cur:
@@ -797,11 +808,12 @@ def upsert_site_link(payload: dict) -> dict:
     if not key:
         raise ValueError("key requerido")
 
-    description = (payload.get("description") or "").strip() or None
-    url         = (payload.get("url") or "").strip() or None
-    image_url   = (payload.get("image_url") or "").strip() or None
-    label_es    = (payload.get("label_es") or "").strip() or None
-    label_en    = (payload.get("label_en") or "").strip() or None
+    description    = (payload.get("description") or "").strip() or None
+    url            = (payload.get("url") or "").strip() or None
+    image_url      = (payload.get("image_url") or "").strip() or None
+    image_webp_url = (payload.get("image_webp_url") or "").strip() or None  # v2.7.0
+    label_es       = (payload.get("label_es") or "").strip() or None
+    label_en       = (payload.get("label_en") or "").strip() or None
     try:
         display_order = int(payload.get("display_order") or 0)
     except (TypeError, ValueError):
@@ -810,21 +822,23 @@ def upsert_site_link(payload: dict) -> dict:
     with conn() as c, c.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO site_links (key, description, url, image_url,
+            INSERT INTO site_links (key, description, url, image_url, image_webp_url,
                                     label_es, label_en, display_order, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (key) DO UPDATE SET
                 description = EXCLUDED.description,
                 url = EXCLUDED.url,
                 image_url = EXCLUDED.image_url,
+                image_webp_url = EXCLUDED.image_webp_url,
                 label_es = EXCLUDED.label_es,
                 label_en = EXCLUDED.label_en,
                 display_order = EXCLUDED.display_order,
                 updated_at = NOW()
-            RETURNING key, description, url, image_url, label_es, label_en,
-                      display_order, updated_at
+            RETURNING key, description, url, image_url, image_webp_url,
+                      label_es, label_en, display_order, updated_at
             """,
-            (key, description, url, image_url, label_es, label_en, display_order),
+            (key, description, url, image_url, image_webp_url,
+             label_es, label_en, display_order),
         )
         row = cur.fetchone()
         if row and row.get("updated_at"):
