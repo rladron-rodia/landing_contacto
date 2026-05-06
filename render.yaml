@@ -48,6 +48,22 @@ services:
       # Token Bearer para listar contactos vía /api/contacts → secret
       - key: ADMIN_TOKEN
         sync: false
+      # --- AWS S3 para upload de imágenes desde admin (v2.7.0) ---
+      # AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY son del IAM user
+      # `monou-landing-prod` con policy mínima:
+      #   - s3:PutObject, s3:GetObject, s3:DeleteObject, s3:ListBucket
+      #   - solo en arn:aws:s3:::monou-landing-images-prod/*
+      # Si las keys se filtran, blast radius = solo ese bucket. Rotar
+      # cada 90 días desde IAM Console (revocar la vieja después).
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Bucket destino para PNG + WebP optimizados
+      - key: S3_BUCKET
+        value: monou-landing-images-prod
+      - key: S3_REGION
+        value: us-east-1
       # Postgres → Render lo inyecta automáticamente
       - key: DATABASE_URL
         fromDatabase:
