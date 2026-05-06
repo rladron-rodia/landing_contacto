@@ -703,9 +703,23 @@
           </div>
         </div>
         <div>
-          <label class="block text-gray-400 text-xs uppercase mb-1">URL de la imagen</label>
-          <input id="game-image" name="image_url" type="url" placeholder="https://..."
+          <label class="block text-gray-400 text-xs uppercase mb-1">Imagen</label>
+          <!-- v2.7.0: widget de upload con optimización automática (PNG + WebP a S3).
+               El input URL queda editable manualmente para compatibilidad backwards
+               (data legacy en muestra-imagen sigue funcionando). -->
+          <div class="flex items-center gap-2 mb-2 flex-wrap">
+            <input type="file" id="game-image-file" hidden
+                   accept="image/png,image/jpeg,image/jpg,image/webp,image/gif">
+            <button type="button" id="game-image-upload-btn"
+                    class="px-3 py-2 border border-white/10 rounded-lg hover:bg-white/5 text-xs flex items-center gap-2">
+              <i class="fa-solid fa-cloud-arrow-up"></i> Subir archivo
+            </button>
+            <span class="text-gray-500 text-xs">PNG/JPG/WebP, máx 15 MB — se optimiza y convierte a WebP</span>
+          </div>
+          <input id="game-image" name="image_url" type="url" placeholder="https://... (o sube archivo arriba)"
                  class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          <input id="game-image-webp" name="image_webp_url" type="hidden">
+          <p id="game-image-status" class="text-xs mt-1 hidden"></p>
           <div class="mt-2 hidden" id="game-image-preview-wrap">
             <img id="game-image-preview" alt="preview"
                  class="w-32 aspect-video object-cover rounded-lg border border-white/10">
@@ -789,9 +803,21 @@
                  class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
         </div>
         <div>
-          <label class="block text-gray-400 text-xs uppercase mb-1">URL de la imagen <span class="text-gray-600 normal-case">(opcional — reemplaza el icono asociado)</span></label>
-          <input id="link-image" name="image_url" type="url" placeholder="https://..."
+          <label class="block text-gray-400 text-xs uppercase mb-1">Imagen <span class="text-gray-600 normal-case">(opcional — reemplaza el icono asociado)</span></label>
+          <!-- v2.7.0: widget de upload con optimización automática (PNG + WebP a S3). -->
+          <div class="flex items-center gap-2 mb-2 flex-wrap">
+            <input type="file" id="link-image-file" hidden
+                   accept="image/png,image/jpeg,image/jpg,image/webp,image/gif">
+            <button type="button" id="link-image-upload-btn"
+                    class="px-3 py-2 border border-white/10 rounded-lg hover:bg-white/5 text-xs flex items-center gap-2">
+              <i class="fa-solid fa-cloud-arrow-up"></i> Subir archivo
+            </button>
+            <span class="text-gray-500 text-xs">PNG/JPG/WebP, máx 15 MB — se optimiza y convierte a WebP</span>
+          </div>
+          <input id="link-image" name="image_url" type="url" placeholder="https://... (o sube archivo arriba)"
                  class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+          <input id="link-image-webp" name="image_webp_url" type="hidden">
+          <p id="link-image-status" class="text-xs mt-1 hidden"></p>
           <div class="mt-2 hidden" id="link-image-preview-wrap">
             <img id="link-image-preview" alt="preview"
                  class="w-32 aspect-square object-cover rounded-lg border border-white/10">
