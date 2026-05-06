@@ -173,6 +173,124 @@
     return json;
   }
 
+  // ---------- Upload de archivos (multipart) ----------
+  // Wrapper aparte de api() porque usa multipart/form-data en lugar de JSON.
+  // No setea Content-Type — el browser lo hace automático con el boundary correcto.
+  async function apiUpload(path, formData) {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${getToken()}` },
+      body: formData,
+    });
+    if (res.status === 401) { clearToken(); throw new Error("Token inválido"); }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error || `HTTP ${res.status}`);
+    }
+    return json;
+  }
+
+  // ---------- Widget reutilizable de upload de imagen ----------
+  // Bindea un widget compuesto (file picker + URL input + status + preview) a
+  // /api/admin/upload-image. Usado por el modal de games y el de site-links.
+  //
+  // Args:
+  //   fileSel     — selector del <input type="file">
+  //   uploadBtn   — selector del botón "Subir archivo" que dispara el picker
+  //   urlSel      — selector del <input type="url"> donde queda el png_url
+  //   webpSel     — selector del <input type="hidden"> donde queda el webp_url
+  //   statusSel   — selector del <p> donde se muestra estado/error
+  //   previewSel  — selector del <img> de preview
+  //   previewWrap — selector del wrapper del preview (toggle hidden)
+  //   folder      — carpeta destino en S3 ("games" | "site-links")
+  //   slugSource  — fn () => string, devuelve el slug actual del form
+  //   maxW, maxH  — bounding box para optimización
+  //   onSuccess   — fn(result), se llama después de actualizar inputs
+  function bindImageUpload(opts) {
+    const fileEl = $(opts.fileSel);
+    const btnEl  = $(opts.uploadBtn);
+    if (!fileEl || !btnEl) return;
+
+    btnEl.addEventListener("click", () => fileEl.click());
+
+    fileEl.addEventListener("change", async () => {
+      const file = fileEl.files && fileEl.files[0];
+      if (!file) return;
+
+      // Validación cliente — defensa en profundidad (el backend ya valida).
+      const MAX_BYTES = 15 * 1024 * 1024;
+      if (file.size > MAX_BYTES) {
+        showStatus(opts.statusSel,
+          `Archivo demasiado grande (${(file.size / 1024 / 1024).toFixed(1)} MB). Máximo 15 MB.`,
+          "error");
+        fileEl.value = "";
+        return;
+      }
+      const acceptedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
+      if (file.type && !acceptedTypes.includes(file.type)) {
+        showStatus(opts.statusSel,
+          `Tipo no soportado: ${file.type}. Usa PNG, JPG o WebP.`,
+          "error");
+        fileEl.value = "";
+        return;
+      }
+
+      // Construir query string con folder + slug + dims
+      const slug = (opts.slugSource ? opts.slugSource() : "image") || "image";
+      const params = new URLSearchParams({
+        folder: opts.folder,
+        slug:   slug,
+        max_w:  String(opts.maxW || 800),
+        max_h:  String(opts.maxH || 600),
+      });
+
+      const fd = new FormData();
+      fd.append("file", file);
+
+      showStatus(opts.statusSel,
+        `Subiendo ${(file.size / 1024 / 1024).toFixed(1)} MB y optimizando...`,
+        "loading");
+      btnEl.disabled = true;
+
+      try {
+        const r = await apiUpload(`/api/admin/upload-image?${params}`, fd);
+        // Actualizar inputs URL + WebP
+        $(opts.urlSel).value  = r.png_url || "";
+        $(opts.webpSel).value = r.webp_url || "";
+        // Actualizar preview
+        if (opts.previewSel && opts.previewWrap) {
+          $(opts.previewSel).src = r.png_url || "";
+          $(opts.previewWrap).classList.remove("hidden");
+        }
+        // Mensaje de éxito con métricas de ahorro
+        const savedKB = ((r.original_size - (r.png_size + r.webp_size) / 2) / 1024).toFixed(0);
+        showStatus(opts.statusSel,
+          `✓ Subido. ${r.dimensions[0]}×${r.dimensions[1]}, ahorro ~${savedKB} KB. PNG + WebP en S3.`,
+          "success");
+        if (typeof opts.onSuccess === "function") opts.onSuccess(r);
+      } catch (err) {
+        showStatus(opts.statusSel, `Error: ${err.message}`, "error");
+      } finally {
+        btnEl.disabled = false;
+        fileEl.value = ""; // permite re-subir el mismo archivo si quiere
+      }
+    });
+  }
+
+  // Helper para mostrar estado del widget de upload
+  function showStatus(sel, text, kind) {
+    const el = $(sel);
+    if (!el) return;
+    const colors = {
+      loading: "text-gray-400",
+      success: "text-green-400",
+      error:   "text-red-400",
+    };
+    el.className = `text-xs mt-1 ${colors[kind] || "text-gray-400"}`;
+    el.textContent = text;
+    el.classList.remove("hidden");
+  }
+
   // ---------- View routing ----------
   function showLogin(msg) {
     $("#login-view").classList.remove("hidden");
@@ -577,6 +695,7 @@
     $("#game-title-es").value   = game ? (game.title_es || fallback) : "";
     $("#game-title-en").value   = game ? (game.title_en || fallback) : "";
     $("#game-image").value      = game ? (game.image_url || "") : "";
+    $("#game-image-webp").value = game ? (game.image_webp_url || "") : "";
     $("#game-link").value       = game ? (game.link_url  || "") : "";
     $("#game-desc-es").value    = game ? (game.description_es || "") : "";
     $("#game-desc-en").value    = game ? (game.description_en || "") : "";
@@ -585,6 +704,9 @@
     $("#game-order").value      = game ? (game.display_order ?? 0) : 0;
     $("#game-category").value   = cat;
     refreshGameImagePreview();
+    // v2.7.0: limpia status de upload de sesión anterior
+    const gameStatus = $("#game-image-status");
+    if (gameStatus) gameStatus.classList.add("hidden");
     openModal("#game-modal");
     setTimeout(() => $("#game-title-es").focus(), 0);
   }
@@ -601,6 +723,15 @@
     }
   }
 
+  // v2.7.0: cuando el admin edita el URL manualmente, ya no podemos garantizar
+  // que el image_webp_url corresponda. Lo limpiamos para no servir un WebP
+  // desactualizado en el frontend.
+  function clearGameWebpIfUrlChanged() {
+    $("#game-image-webp").value = "";
+    const status = $("#game-image-status");
+    if (status) status.classList.add("hidden");
+  }
+
   async function submitGameForm(e) {
     e.preventDefault();
     $("#game-form-error").classList.add("hidden");
@@ -608,18 +739,19 @@
     const titleEn = $("#game-title-en").value.trim();
     const category = $("#game-category").value || "f2p";
     const payload = {
-      slug:           $("#game-slug").value.trim(),
-      title_es:       titleEs,
-      title_en:       titleEn,
-      title:          titleEs || titleEn,  // legacy fallback
-      image_url:      $("#game-image").value.trim(),
-      link_url:       $("#game-link").value.trim(),
-      description_es: $("#game-desc-es").value.trim(),
-      description_en: $("#game-desc-en").value.trim(),
-      tags_es:        $("#game-tags-es").value,
-      tags_en:        $("#game-tags-en").value,
-      category:       category,
-      display_order:  parseInt($("#game-order").value, 10) || 0,
+      slug:            $("#game-slug").value.trim(),
+      title_es:        titleEs,
+      title_en:        titleEn,
+      title:           titleEs || titleEn,  // legacy fallback
+      image_url:       $("#game-image").value.trim(),
+      image_webp_url:  $("#game-image-webp").value.trim(),  // v2.7.0: WebP fallback
+      link_url:        $("#game-link").value.trim(),
+      description_es:  $("#game-desc-es").value.trim(),
+      description_en:  $("#game-desc-en").value.trim(),
+      tags_es:         $("#game-tags-es").value,
+      tags_en:         $("#game-tags-en").value,
+      category:        category,
+      display_order:   parseInt($("#game-order").value, 10) || 0,
     };
     try {
       await api("POST", "/api/admin/games", payload);
@@ -659,7 +791,25 @@
     }
   });
   $("#game-form").addEventListener("submit", submitGameForm);
-  $("#game-image").addEventListener("input", refreshGameImagePreview);
+  $("#game-image").addEventListener("input", () => {
+    refreshGameImagePreview();
+    clearGameWebpIfUrlChanged();
+  });
+
+  // v2.7.0: bind del widget de upload de imagen
+  bindImageUpload({
+    fileSel:     "#game-image-file",
+    uploadBtn:   "#game-image-upload-btn",
+    urlSel:      "#game-image",
+    webpSel:     "#game-image-webp",
+    statusSel:   "#game-image-status",
+    previewSel:  "#game-image-preview",
+    previewWrap: "#game-image-preview-wrap",
+    folder:      "games",
+    slugSource:  () => $("#game-slug").value.trim(),
+    maxW:        800,
+    maxH:        450,
+  });
 
   // ============================================================
   //   PUBLISHERS (juegos AAA)
@@ -829,6 +979,13 @@
     else     { wrap.classList.add("hidden"); }
   }
 
+  // v2.7.0: al editar el URL manualmente, limpiar el WebP porque ya no aplica.
+  function clearLinkWebpIfUrlChanged() {
+    $("#link-image-webp").value = "";
+    const status = $("#link-image-status");
+    if (status) status.classList.add("hidden");
+  }
+
   function openLinkModal(link) {
     const isNew = !link;
     $("#link-modal-title").textContent = isNew ? "Nuevo enlace" : "Editar enlace";
@@ -838,10 +995,14 @@
     $("#link-description").value  = link ? (link.description || "") : "";
     $("#link-url").value          = link ? (link.url || "") : "";
     $("#link-image").value        = link ? (link.image_url || "") : "";
+    $("#link-image-webp").value   = link ? (link.image_webp_url || "") : "";
     $("#link-label-es").value     = link ? (link.label_es || "") : "";
     $("#link-label-en").value     = link ? (link.label_en || "") : "";
     $("#link-order").value        = link ? (link.display_order ?? 0) : 0;
     refreshLinkImagePreview();
+    // v2.7.0: limpia status de upload de sesión anterior
+    const linkStatus = $("#link-image-status");
+    if (linkStatus) linkStatus.classList.add("hidden");
     openModal("#link-modal");
     setTimeout(() => $("#link-url").focus(), 0);
   }
@@ -850,13 +1011,14 @@
     e.preventDefault();
     $("#link-form-error").classList.add("hidden");
     const payload = {
-      key:           $("#link-key").value.trim(),
-      description:   $("#link-description").value.trim(),
-      url:           $("#link-url").value.trim(),
-      image_url:     $("#link-image").value.trim(),
-      label_es:      $("#link-label-es").value.trim(),
-      label_en:      $("#link-label-en").value.trim(),
-      display_order: parseInt($("#link-order").value, 10) || 0,
+      key:            $("#link-key").value.trim(),
+      description:    $("#link-description").value.trim(),
+      url:            $("#link-url").value.trim(),
+      image_url:      $("#link-image").value.trim(),
+      image_webp_url: $("#link-image-webp").value.trim(),  // v2.7.0: WebP fallback
+      label_es:       $("#link-label-es").value.trim(),
+      label_en:       $("#link-label-en").value.trim(),
+      display_order:  parseInt($("#link-order").value, 10) || 0,
     };
     try {
       await api("POST", "/api/admin/site-links", payload);
@@ -893,7 +1055,25 @@
     }
   });
   $("#link-form").addEventListener("submit", submitLinkForm);
-  $("#link-image").addEventListener("input", refreshLinkImagePreview);
+  $("#link-image").addEventListener("input", () => {
+    refreshLinkImagePreview();
+    clearLinkWebpIfUrlChanged();
+  });
+
+  // v2.7.0: bind del widget de upload de imagen
+  bindImageUpload({
+    fileSel:     "#link-image-file",
+    uploadBtn:   "#link-image-upload-btn",
+    urlSel:      "#link-image",
+    webpSel:     "#link-image-webp",
+    statusSel:   "#link-image-status",
+    previewSel:  "#link-image-preview",
+    previewWrap: "#link-image-preview-wrap",
+    folder:      "site-links",
+    slugSource:  () => $("#link-key").value.trim(),
+    maxW:        400,
+    maxH:        400,
+  });
 
   // ============================================================
   //   DELIVERY OPTIONS (Data Formats + Delivery Methods)
