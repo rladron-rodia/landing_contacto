@@ -846,7 +846,14 @@ def admin_upload_image():
         png_bytes = image_optimizer.encode_png(img_resized)
         webp_bytes = image_optimizer.encode_webp(img_resized, quality=quality)
     except image_optimizer.ImageOptimizationError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+        # Log con detalle (admin lo ve en Render logs) pero respuesta genérica
+        # para evitar exposición de detalles internos via CodeQL "Information
+        # exposure through an exception".
+        app.logger.warning("Falló validación/optimización de imagen: %s", exc)
+        return jsonify({
+            "ok": False,
+            "error": "imagen inválida o no procesable (revisa formato, tamaño y dimensiones)",
+        }), 400
     except Exception:
         app.logger.exception("Error inesperado procesando imagen")
         return jsonify({"ok": False, "error": "error interno procesando imagen"}), 500
@@ -862,8 +869,14 @@ def admin_upload_image():
         png_url = s3_uploader.upload(png_key, png_bytes, "image/png")
         webp_url = s3_uploader.upload(webp_key, webp_bytes, "image/webp")
     except s3_uploader.S3UploadError as exc:
-        app.logger.error("Falló upload a S3: %s", exc)
-        return jsonify({"ok": False, "error": f"upload a S3 falló: {exc}"}), 502
+        # exception() captura traceback completo en Render logs.
+        # Respuesta genérica al cliente para no exponer detalles internos
+        # (CodeQL: "Information exposure through an exception").
+        app.logger.exception("Falló upload a S3: %s", exc)
+        return jsonify({
+            "ok": False,
+            "error": "upload a S3 falló (revisa logs del backend)",
+        }), 502
     except Exception:
         app.logger.exception("Error inesperado subiendo a S3")
         return jsonify({"ok": False, "error": "error interno subiendo a S3"}), 500

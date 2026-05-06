@@ -64,7 +64,10 @@ def validate_and_load(
     except UnidentifiedImageError:
         raise ImageOptimizationError("archivo no es una imagen reconocida")
     except (OSError, ValueError) as e:
-        raise ImageOptimizationError(f"imagen corrupta: {e}")
+        # Encadenamos `from e` para logging via traceback, pero NO incluimos
+        # el mensaje original de Pillow en nuestro mensaje porque podría
+        # exponer detalles internos (paths, memoria, etc.) al usuario final.
+        raise ImageOptimizationError("imagen corrupta o ilegible") from e
 
     fmt = (img.format or "").upper()
     if fmt not in ACCEPTED_INPUT_FORMATS:
