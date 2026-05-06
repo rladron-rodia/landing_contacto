@@ -27,6 +27,7 @@ import os
 import re
 import html
 import hmac
+import hashlib
 import socket
 import json
 import urllib.request
@@ -40,6 +41,8 @@ from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
 import db  # módulo de persistencia (degrada a no-op si DATABASE_URL no está)
+import image_optimizer  # procesamiento Pillow (lazy: solo carga si /upload-image se invoca)
+import s3_uploader      # boto3 wrapper (lazy: solo carga si /upload-image se invoca)
 
 
 # --------------------------------------------------------------------------
@@ -47,8 +50,19 @@ import db  # módulo de persistencia (degrada a no-op si DATABASE_URL no está)
 # --------------------------------------------------------------------------
 
 # Tamaño máximo del body aceptado por el servidor (defensa contra DoS de
-# payloads gigantes). 64 KB es holgado para un formulario de contacto.
-MAX_CONTENT_LENGTH = 64 * 1024  # 64 KB
+# payloads gigantes).
+#
+# v2.7.0: subido de 64 KB a 16 MB para soportar /api/admin/upload-image
+# (uploads de imágenes desde el admin). Trade-off: las otras rutas también
+# aceptan body hasta 16 MB, pero:
+#   - /api/contact valida cada campo vía FIELD_LIMITS (max 4 KB en mensaje),
+#     un body grande se rechaza después de parsear JSON. No hay nuevo vector
+#     de DoS porque el endpoint ya leía el body completo.
+#   - /api/admin/* valida JSON y schemas de DB; bodies grandes fallan.
+# El límite real efectivo de las rutas que NO son upload sigue siendo el
+# implícito por validación. Si se quisiera per-route en el futuro, ver
+# https://flask.palletsprojects.com/en/3.0.x/patterns/fileuploads/
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
 
 # Longitudes máximas por campo (validación server-side, no confiar en el cliente)
 FIELD_LIMITS = {
@@ -725,6 +739,147 @@ def admin_delete_cta_tag(cta_key):
     if not deleted:
         return jsonify({"ok": False, "error": "not found"}), 404
     return jsonify({"ok": True}), 200
+
+
+# ---------------------------------------------------------------------------
+# Image upload — admin sube imágenes que se optimizan y suben a S3 (v2.7.0)
+#
+# Flujo:
+#   1. Admin POST con multipart/form-data, campo `file`
+#   2. Backend valida (formato, tamaño, dimensiones)
+#   3. Optimiza con Pillow:
+#        - Resize a max_w x max_h (default 800x600)
+#        - Genera PNG optimizado (lossless, fallback)
+#        - Genera WebP quality 80 (~30% del peso del PNG)
+#   4. Sube ambos al bucket S3 dedicado (monou-landing-images-prod)
+#   5. Devuelve las dos URLs públicas para que el frontend use <picture>
+#
+# Seguridad:
+#   - Auth: Bearer ADMIN_TOKEN (mismo que el resto de /api/admin/*)
+#   - Rate limit: hereda el default de 200/hour por IP del Limiter global
+#   - File size: enforced por MAX_CONTENT_LENGTH (16 MB) + image_optimizer
+#   - Format check: magic bytes vía Pillow (no confiamos en filename ext)
+#   - S3 key: incluye hash SHA-256 del contenido → idempotente y unguessable
+# ---------------------------------------------------------------------------
+
+# Slugs válidos en la URL key de S3. Limita a chars seguros y URL-friendly.
+_SLUG_CLEAN_RE = re.compile(r"[^a-z0-9-]+")
+_VALID_FOLDERS = {"games", "site-links", "uploads"}  # whitelist de carpetas en S3
+
+
+@app.route("/api/admin/upload-image", methods=["POST"])
+@limiter.limit("30 per hour")  # más estricto que el default por costo S3
+def admin_upload_image():
+    """Sube una imagen, la optimiza, y devuelve URLs PNG + WebP en S3.
+
+    Multipart form fields:
+        file (required) — el archivo de imagen
+
+    Query params (todos opcionales):
+        folder=games|site-links|uploads — carpeta destino en S3 (default: uploads)
+        slug=<slug-base>                — base del nombre (default: "image")
+        max_w=<int>                     — bounding box ancho (default: 800)
+        max_h=<int>                     — bounding box alto (default: 600)
+        quality=<int>                   — calidad WebP 1-100 (default: 80)
+
+    Response 200:
+        {
+          "ok": true,
+          "png_url":       "https://...amazonaws.com/games/aventure-a3b2c1d4.png",
+          "webp_url":      "https://...amazonaws.com/games/aventure-a3b2c1d4.webp",
+          "original_size": 2073856,
+          "png_size":      156432,
+          "webp_size":     48372,
+          "dimensions":    [800, 450]
+        }
+
+    Response 400 / 401 / 500:
+        { "ok": false, "error": "..." }
+    """
+    if not _is_admin(request):
+        return _unauthorized()
+
+    # Sanity check: si las env vars de S3 no están seteadas, devolvemos error
+    # claro en vez de fallar con stack trace de boto3.
+    if not s3_uploader.is_configured():
+        return jsonify({
+            "ok": False,
+            "error": "S3 no configurado: faltan env vars S3_BUCKET, AWS_ACCESS_KEY_ID o AWS_SECRET_ACCESS_KEY",
+        }), 500
+
+    # 1. Validar que viene un archivo
+    f = request.files.get("file")
+    if f is None or not f.filename:
+        return jsonify({"ok": False, "error": "campo 'file' faltante o vacío"}), 400
+
+    raw = f.read()
+    original_size = len(raw)
+
+    # 2. Parsear query params con defaults sensatos
+    folder = request.args.get("folder", "uploads").strip().lower()
+    if folder not in _VALID_FOLDERS:
+        return jsonify({
+            "ok": False,
+            "error": f"folder inválido: {folder!r} (permitidos: {sorted(_VALID_FOLDERS)})",
+        }), 400
+
+    slug_raw = (request.args.get("slug", "image") or "image").strip().lower()
+    slug = _SLUG_CLEAN_RE.sub("-", slug_raw).strip("-")[:50] or "image"
+
+    try:
+        max_w = int(request.args.get("max_w", 800))
+        max_h = int(request.args.get("max_h", 600))
+        quality = int(request.args.get("quality", image_optimizer.DEFAULT_WEBP_QUALITY))
+    except ValueError:
+        return jsonify({"ok": False, "error": "max_w/max_h/quality deben ser enteros"}), 400
+
+    if not (16 <= max_w <= 4000) or not (16 <= max_h <= 4000):
+        return jsonify({
+            "ok": False,
+            "error": "max_w y max_h deben estar entre 16 y 4000",
+        }), 400
+
+    # 3. Validar y procesar la imagen
+    try:
+        img = image_optimizer.validate_and_load(raw)
+        img_resized = image_optimizer.resize_to_bbox(img, max_w, max_h)
+        png_bytes = image_optimizer.encode_png(img_resized)
+        webp_bytes = image_optimizer.encode_webp(img_resized, quality=quality)
+    except image_optimizer.ImageOptimizationError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception:
+        app.logger.exception("Error inesperado procesando imagen")
+        return jsonify({"ok": False, "error": "error interno procesando imagen"}), 500
+
+    # 4. Generar key S3 con hash del contenido (idempotente)
+    content_hash = hashlib.sha256(png_bytes).hexdigest()[:8]
+    base_key = f"{folder}/{slug}-{content_hash}"
+    png_key = f"{base_key}.png"
+    webp_key = f"{base_key}.webp"
+
+    # 5. Subir a S3 (PNG primero; si falla, no subimos el WebP)
+    try:
+        png_url = s3_uploader.upload(png_key, png_bytes, "image/png")
+        webp_url = s3_uploader.upload(webp_key, webp_bytes, "image/webp")
+    except s3_uploader.S3UploadError as exc:
+        app.logger.error("Falló upload a S3: %s", exc)
+        return jsonify({"ok": False, "error": f"upload a S3 falló: {exc}"}), 502
+    except Exception:
+        app.logger.exception("Error inesperado subiendo a S3")
+        return jsonify({"ok": False, "error": "error interno subiendo a S3"}), 500
+
+    return jsonify({
+        "ok": True,
+        "png_url": png_url,
+        "webp_url": webp_url,
+        "original_size": original_size,
+        "png_size": len(png_bytes),
+        "webp_size": len(webp_bytes),
+        "dimensions": [img_resized.width, img_resized.height],
+        "reduction_pct": round(
+            (1 - (len(png_bytes) + len(webp_bytes)) / (2 * original_size)) * 100, 1
+        ) if original_size else 0,
+    }), 200
 
 
 if __name__ == "__main__":
