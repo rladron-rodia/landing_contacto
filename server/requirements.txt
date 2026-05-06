@@ -5,5 +5,9 @@ python-dotenv==1.2.2
 gunicorn==22.0.0
 psycopg[binary]==3.2.3
 # v2.7.0: image upload + optimization en /api/admin/upload-image
-Pillow==11.3.0
+# v2.7.1 (security): bump Pillow 11.3.0 -> 12.2.0 cierra 6 CVEs (3 high + 3 moderate)
+# Vectores: FITS GZIP bomb, PSD OOB writes, PDF parsing DoS, font integer overflow,
+# nested list coords heap overflow. Ninguno explotable en nuestro código (solo
+# aceptamos PNG/JPG/WebP/GIF) pero defense in depth.
+Pillow==12.2.0
 boto3==1.42.97

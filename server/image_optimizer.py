@@ -96,7 +96,10 @@ def resize_to_bbox(img: Image.Image, max_w: int, max_h: int) -> Image.Image:
         raise ImageOptimizationError(f"max_w/max_h inválido: {max_w}x{max_h}")
 
     out = img.copy()
-    out.thumbnail((max_w, max_h), Image.LANCZOS)
+    # v2.7.1: usa el enum Image.Resampling.LANCZOS (compatible con Pillow 9.1+,
+    # incluyendo 12.x). El alias antiguo Image.LANCZOS estaba deprecado desde
+    # Pillow 10 y fue removido en 12.0.
+    out.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
     return out
 
 
