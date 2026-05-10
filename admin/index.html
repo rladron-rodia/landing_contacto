@@ -711,9 +711,9 @@
         </div>
         <div>
           <label class="block text-gray-400 text-xs uppercase mb-1">Imagen</label>
-          <!-- v2.7.0: widget de upload con optimización automática (PNG + WebP a S3).
-               El input URL queda editable manualmente para compatibilidad backwards
-               (data legacy en muestra-imagen sigue funcionando). -->
+          <!-- v2.7.0: widget de upload con optimización automática (PNG + WebP a S3
+               vía monou-landing-images-prod). El input URL queda editable manualmente
+               para edge cases (asset hosted en otro lado, override puntual, etc.). -->
           <div class="flex items-center gap-2 mb-2 flex-wrap">
             <input type="file" id="game-image-file" hidden
                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif">

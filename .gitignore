@@ -27,6 +27,9 @@ id_*
 *.bak
 db_backup*
 
+# Outputs one-off de scripts de migración (no van en repo)
+scripts/v312-*
+
 # Node / logs
 node_modules/
 *.log

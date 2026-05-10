@@ -7,6 +7,74 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ---
 
+## [3.1.2] — 2026-05-10
+
+### Patch — Image optimization & legacy bucket retirement
+
+Migración de las 7 imágenes restantes desde el bucket legacy compartido
+`muestra-imagen` → bucket prod dedicado `monou-landing-images-prod`, con
+pipeline de optimización completo (resize + WebP + PNG fallback).
+
+### Performance
+
+- **`<picture>` tags con WebP + PNG fallback** en `index.html`. Las 10
+  referencias `<img>` hardcoded (3 carousel desktop, 3 carousel mobile,
+  4 publishers logos) ahora cargan WebP en navegadores modernos y caen
+  a PNG en Safari < 14 / crawlers viejos. WebP ~98% más liviano que el
+  PNG original sin redimensionar.
+- **Resize a dimensiones reales de display × 2 (retina)**:
+  - F2P carousel (320×180 displayed) → 640×360 max
+  - Publishers logos (200×200 displayed) → 400×400 max
+- **Cache-Control `max-age=31536000, immutable`** en uploads. URLs
+  versionadas con sha256 hash (8 chars) en filename — cache busting
+  automático cuando el contenido cambia.
+- **Total payload reduction**: 11.77 MB → 167 KB (98.6% menos) en las
+  7 imágenes. Esperado: +5-10 puntos PageSpeed mobile en LCP, especialmente
+  en redes lentas / 4G.
+
+### Changed
+
+- **`index.html`**: 10 reemplazos `<img src="muestra-imagen...">` →
+  `<picture><source webp><img png></picture>`. dns-prefetch ahora apunta
+  al bucket nuevo.
+- **`server/db.py`**: `GAMES_SEED` actualizado con las 7 URLs nuevas
+  (3 F2P carousel + 4 publishers). `SITE_LINKS_SEED` para
+  `view_full_catalog` queda con `image_url=''` (la card renderiza un
+  FA icon, no una imagen — ChatGPT.png estaba corrupto en muestra-imagen,
+  y de todas formas no se usaba en el HTML).
+- **`admin/index.html`**: comentario sobre "muestra-imagen legacy"
+  removido — todo el flujo de upload usa `monou-landing-images-prod`.
+- **`.gitignore`**: agregado `scripts/v312-*` para outputs one-off del
+  migrador.
+
+### Added
+
+- **`scripts/migrate-images-v3.1.2.py`** — script de migración one-off
+  (download → resize → WebP+PNG → upload), con flag `--dry-run` para
+  inspección visual antes de tocar S3. Documenta el pipeline para
+  futuras migraciones.
+
+### Migration steps applied
+
+1. `python3 scripts/migrate-images-v3.1.2.py --dry-run` — validación
+   visual de las 8 imágenes optimizadas en `/tmp/v312/`.
+2. `python3 scripts/migrate-images-v3.1.2.py` — upload real a S3.
+   Resultado: 7/8 OK, 1 falla (ChatGPT.png corrupto en bucket origen).
+3. `psql -f scripts/v312-db-updates.sql` — UPDATE 3 games + cleanup
+   site_links.image_url='' para view_full_catalog.
+4. `./deploy.sh v3.1.2` — frontend a S3+CloudFront, backend sin cambios.
+5. PageSpeed Insights mobile + desktop verification.
+
+### Deferred / Notes
+
+- **`muestra-imagen` bucket** sigue activo (otros proyectos lo usan,
+  no es propiedad exclusiva del landing). Esta migración solo desacopla
+  monoulabs.ai de él.
+- **ChatGPT.png** corrupto en muestra-imagen — no se migra, no se
+  reemplaza (no se usa visualmente).
+
+---
+
 ## [3.1.1] — 2026-05-10
 
 ### Patch — quick wins from security + performance/SEO audits
