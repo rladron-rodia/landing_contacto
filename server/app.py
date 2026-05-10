@@ -30,6 +30,9 @@ import hmac
 import hashlib
 import socket
 import json
+import time
+import base64
+import secrets
 import urllib.request
 import urllib.error
 from contextlib import contextmanager
@@ -409,6 +412,205 @@ def list_contacts():
         if r.get("created_at"):
             r["created_at"] = r["created_at"].isoformat()
     return jsonify({"ok": True, "count": len(rows), "contacts": rows}), 200
+
+
+# --------------------------------------------------------------------------
+# Admin token recovery — magic link via email (público, rate-limited)
+#
+# Flujo:
+#   1) Cliente hace POST /api/admin/request-token-recovery (sin auth)
+#   2) Backend genera recovery_id firmado HMAC con FLASK_SECRET_KEY (15 min)
+#   3) Backend envía email a MAIL_TO con link https://.../admin/?recover=<id>
+#   4) Cliente abre el link → frontend hace POST /api/admin/exchange-recovery
+#      con el recovery_id → backend valida y devuelve ADMIN_TOKEN
+#   5) Frontend autollena el form y entra al admin
+#
+# El recovery_id es signed-stateless (no necesitamos DB ni state compartido).
+# Se puede usar múltiples veces dentro de los 15 min — aceptable porque sólo
+# llega via email a MAIL_TO.
+# --------------------------------------------------------------------------
+
+RECOVERY_EXPIRES_IN_SECONDS = 15 * 60
+
+
+def _recovery_secret() -> bytes:
+    """Devuelve FLASK_SECRET_KEY como bytes para HMAC."""
+    secret = os.getenv("FLASK_SECRET_KEY", "").encode()
+    if len(secret) < 16:
+        raise RuntimeError(
+            "FLASK_SECRET_KEY missing or shorter than 16 bytes — recovery disabled")
+    return secret
+
+
+def _generate_recovery_id(expires_in: int = RECOVERY_EXPIRES_IN_SECONDS) -> str:
+    """Genera token firmado: base64url(payload + '.' + hmac_sha256(payload))."""
+    expires_at = int(time.time()) + int(expires_in)
+    nonce = secrets.token_urlsafe(16)
+    payload = f"{expires_at}:{nonce}".encode("ascii")
+    sig = hmac.new(_recovery_secret(), payload, hashlib.sha256).digest()
+    raw = payload + b"." + sig
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _validate_recovery_id(token: str) -> tuple[bool, str]:
+    """Devuelve (valid, error_code). error_code es '' si valid=True."""
+    if not token or not isinstance(token, str):
+        return False, "missing"
+    try:
+        padded = token + "=" * (-len(token) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+    except Exception:
+        return False, "malformed"
+    if b"." not in raw:
+        return False, "malformed"
+    payload, sig = raw.rsplit(b".", 1)
+    try:
+        expected_sig = hmac.new(
+            _recovery_secret(), payload, hashlib.sha256).digest()
+    except RuntimeError:
+        return False, "server_misconfigured"
+    if not hmac.compare_digest(sig, expected_sig):
+        return False, "bad_signature"
+    try:
+        expires_at_str, _nonce = payload.decode("ascii").split(":", 1)
+        expires_at = int(expires_at_str)
+    except Exception:
+        return False, "malformed"
+    if time.time() > expires_at:
+        return False, "expired"
+    return True, ""
+
+
+def _send_simple_email(subject: str, body_text: str, body_html: str) -> dict:
+    """Envía un correo non-contact-form vía Resend. Reutiliza config de send_email."""
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    if not api_key:
+        raise EmailError("RESEND_API_KEY no está configurada")
+
+    mail_from = os.getenv("MAIL_FROM",
+                          "Monou Labs <onboarding@resend.dev>").strip()
+    mail_to_raw = os.getenv("MAIL_TO", "")
+    mail_to = [t.strip() for t in mail_to_raw.split(",") if t.strip()]
+    if not mail_to:
+        raise EmailError("MAIL_TO no está configurada")
+
+    body = {
+        "from": mail_from,
+        "to": mail_to,
+        "subject": subject,
+        "text": body_text,
+        "html": body_html,
+    }
+    req = urllib.request.Request(
+        RESEND_ENDPOINT,
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "monou-landing-backend/1.0",
+        },
+        method="POST",
+    )
+    with force_ipv4():
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            if e.code in (401, 403):
+                raise EmailAuthError(
+                    f"Resend rechazó la API key (HTTP {e.code}): {err_body}")
+            if e.code == 422:
+                raise EmailValidationError(
+                    f"Resend rechazó el correo (HTTP 422): {err_body}")
+            raise EmailError(f"Resend HTTP {e.code}: {err_body}")
+        except urllib.error.URLError as e:
+            raise EmailError(f"Resend network error: {e}")
+
+
+@app.route("/api/admin/request-token-recovery", methods=["POST"])
+@limiter.limit("3 per hour; 1 per 5 minutes")
+def request_token_recovery():
+    """Genera recovery link y lo envía a MAIL_TO. Siempre retorna 200 (no leak)."""
+    if not os.getenv("ADMIN_TOKEN") or not os.getenv("FLASK_SECRET_KEY"):
+        app.logger.warning(
+            "Recovery request received but ADMIN_TOKEN or FLASK_SECRET_KEY missing")
+        return jsonify({
+            "ok": True,
+            "message": "Si la cuenta existe, recibirás un correo en breve."
+        }), 200
+
+    try:
+        recovery_id = _generate_recovery_id()
+    except RuntimeError as e:
+        app.logger.error(f"Recovery generation failed: {e}")
+        return jsonify({
+            "ok": True,
+            "message": "Si la cuenta existe, recibirás un correo en breve."
+        }), 200
+
+    # URL absoluta — usamos monoulabs.ai como host canónico de admin.
+    recovery_url = f"https://monoulabs.ai/admin/?recover={recovery_id}"
+
+    subject = "[Monou Labs] Recuperación de acceso al admin"
+    body_text = (
+        "Solicitaste recuperar tu acceso al admin de Monou Labs.\n\n"
+        f"Haz click en este enlace en los próximos 15 minutos para acceder:\n"
+        f"{recovery_url}\n\n"
+        "Si no solicitaste esto, ignora este correo. "
+        "El enlace expira en 15 minutos.\n"
+    )
+    body_html = f"""\
+<html>
+  <body style="font-family: Inter, Arial, sans-serif; color:#0B0E14;">
+    <h2 style="color:#0d9488;">Recuperación de acceso — Monou Labs</h2>
+    <p>Solicitaste recuperar tu acceso al admin.</p>
+    <p style="margin: 24px 0;">
+      <a href="{recovery_url}"
+         style="background:#14b8a6;color:#fff;padding:12px 24px;
+                text-decoration:none;border-radius:8px;display:inline-block;">
+        Acceder al admin
+      </a>
+    </p>
+    <p style="font-size:12px;color:#666;">
+      El enlace expira en 15 minutos. Si no solicitaste esto, ignora este correo.
+    </p>
+    <p style="font-size:12px;color:#666;">
+      Si el botón no funciona, copia y pega esta URL:<br>
+      <code style="word-break:break-all;">{recovery_url}</code>
+    </p>
+  </body>
+</html>"""
+
+    try:
+        _send_simple_email(subject, body_text, body_html)
+    except EmailError as e:
+        app.logger.error(f"Failed to send recovery email: {e}")
+        # Aún así retornamos 200 para no leakear si MAIL_TO existe.
+
+    return jsonify({
+        "ok": True,
+        "message": "Si la cuenta existe, recibirás un correo en breve."
+    }), 200
+
+
+@app.route("/api/admin/exchange-recovery", methods=["POST"])
+@limiter.limit("10 per hour; 5 per 5 minutes")
+def exchange_recovery():
+    """Valida recovery_id y devuelve ADMIN_TOKEN para auto-login."""
+    data = request.get_json(silent=True) or {}
+    recovery_id = (data.get("recovery_id") or "").strip()
+
+    valid, err = _validate_recovery_id(recovery_id)
+    if not valid:
+        return jsonify({"ok": False, "error": "invalid_or_expired"}), 401
+
+    token = os.getenv("ADMIN_TOKEN", "")
+    if not token:
+        return jsonify({"ok": False, "error": "admin_not_configured"}), 500
+
+    return jsonify({"ok": True, "admin_token": token}), 200
 
 
 # ---------------------------------------------------------------------------

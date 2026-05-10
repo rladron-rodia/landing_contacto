@@ -570,6 +570,41 @@
     showApp();
   });
 
+  // ---------- Forgot token: request magic link ----------
+  $("#forgot-token-btn").addEventListener("click", async () => {
+    const errEl  = $("#login-error");
+    const infoEl = $("#login-info");
+    errEl.classList.add("hidden");
+
+    if (!confirm("¿Enviar un enlace de recuperación a tu email registrado?")) {
+      return;
+    }
+
+    infoEl.textContent = "Enviando…";
+    infoEl.classList.remove("hidden");
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/request-token-recovery`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({}),
+      });
+      if (res.status === 429) {
+        infoEl.classList.add("hidden");
+        errEl.textContent = "Demasiados intentos, espera unos minutos.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+      // Backend siempre devuelve 200 con mensaje genérico (no info leak)
+      infoEl.textContent =
+        "Si la cuenta existe, recibirás un email con el enlace en un momento.";
+    } catch (e) {
+      infoEl.classList.add("hidden");
+      errEl.textContent = "Error de red. Intenta de nuevo.";
+      errEl.classList.remove("hidden");
+    }
+  });
+
   $$(".nav-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       // Si el click vino del lápiz de editar nombre, abre edición y no navega
@@ -1605,6 +1640,50 @@
   });
 
   // ---------- Boot ----------
-  if (getToken()) showApp();
-  else            showLogin();
+  // Si la URL trae ?recover=<id>, intercambia con el backend y entra automáticamente.
+  // Si no, comportamiento normal: mostrar login (token vive sólo en memoria).
+  (async function boot() {
+    const params = new URLSearchParams(window.location.search);
+    const recoveryId = params.get("recover");
+
+    if (recoveryId) {
+      // Limpia la URL inmediatamente (antes del exchange) para que el recovery_id
+      // no quede en history/screenshots/shares.
+      window.history.replaceState({}, "", window.location.pathname);
+
+      const errEl  = $("#login-error");
+      const infoEl = $("#login-info");
+      // Asegúrate de mostrar la vista de login antes de mensajear
+      showLogin();
+      infoEl.textContent = "Verificando enlace de recuperación…";
+      infoEl.classList.remove("hidden");
+
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/exchange-recovery`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ recovery_id: recoveryId }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.ok && json.admin_token) {
+          setToken(json.admin_token);
+          infoEl.classList.add("hidden");
+          showApp();
+          return;
+        }
+        infoEl.classList.add("hidden");
+        errEl.textContent = "Enlace inválido o expirado. Solicita uno nuevo.";
+        errEl.classList.remove("hidden");
+        return;
+      } catch (e) {
+        infoEl.classList.add("hidden");
+        errEl.textContent = "Error de red al validar el enlace.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+    }
+
+    if (getToken()) showApp();
+    else            showLogin();
+  })();
 })();
