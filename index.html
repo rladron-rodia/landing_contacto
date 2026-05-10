@@ -247,9 +247,9 @@
          pero no reposicionan otros elementos). -->
     <link rel="preload" href="assets/css/fa-subset.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="assets/css/fa-subset.min.css"></noscript>
-    <!-- Preload de los woff2 críticos de FontAwesome (regular + solid).
-         Resuelve la critical chain detectada por Lighthouse. -->
-    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/fa-solid-900.woff2" crossorigin>
+    <!-- Preload solo de fa-regular-400 (24 KB, usado en iconos above-the-fold).
+         fa-solid-900 (156 KB) NO se preloadea porque no está en el LCP path
+         y bloquea la red para los Inter fonts críticos (v3.1.1 patch). -->
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/fa-regular-400.woff2" crossorigin>
 
     <!-- ═══ Inter font self-hosted (v2.4.2 — eliminamos fonts.googleapis.com 750ms) ═══ -->
@@ -371,6 +371,12 @@
         cursor: pointer;
         transition: all 0.3s;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        /* v3.1.1 — reset UA button defaults so <button> renders identical to old <div> */
+        appearance: none;
+        -webkit-appearance: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
       }
 
       .carousel-btn:hover
@@ -406,6 +412,13 @@
         background: rgba(255, 255, 255, 0.2);
         cursor: pointer;
         transition: all 0.3s;
+        /* v3.1.1 — reset UA button defaults so <button> renders identical to old <div> */
+        appearance: none;
+        -webkit-appearance: none;
+        border: 0;
+        padding: 0;
+        font: inherit;
+        color: inherit;
       }
 
       .carousel-indicator.active
@@ -706,8 +719,8 @@
             con profundidad sin precedentes.</p>
         </div>
         <div class="carousel-container relative hidden md:block">
-          <div onclick="moveCarousel(-1)" class="carousel-btn prev"><i class="fa-solid fa-chevron-left text-white"></i></div>
-          <div onclick="moveCarousel(1)" class="carousel-btn next"><i class="fa-solid fa-chevron-right text-white"></i></div>
+          <button type="button" onclick="moveCarousel(-1)" aria-label="Slide anterior" class="carousel-btn prev"><i class="fa-solid fa-chevron-left text-white" aria-hidden="true"></i></button>
+          <button type="button" onclick="moveCarousel(1)" aria-label="Slide siguiente" class="carousel-btn next"><i class="fa-solid fa-chevron-right text-white" aria-hidden="true"></i></button>
           <div id="carouselTrack" class="carousel-track">
             <!-- Slide 1: Action RPG -->
             <div class="carousel-item">
@@ -840,11 +853,11 @@
               </div>
             </div>
           </div>
-          <div id="carouselIndicators" class="carousel-indicators">
-            <div onclick="goToSlide(0)" class="carousel-indicator active"></div>
-            <div onclick="goToSlide(1)" class="carousel-indicator"></div>
-            <div onclick="goToSlide(2)" class="carousel-indicator"></div>
-            <div onclick="goToSlide(3)" class="carousel-indicator"></div>
+          <div id="carouselIndicators" class="carousel-indicators" role="tablist" aria-label="Catálogo F2P — selector de slide">
+            <button type="button" onclick="goToSlide(0)" class="carousel-indicator active" role="tab" aria-label="Ir al slide 1" aria-selected="true"></button>
+            <button type="button" onclick="goToSlide(1)" class="carousel-indicator" role="tab" aria-label="Ir al slide 2" aria-selected="false"></button>
+            <button type="button" onclick="goToSlide(2)" class="carousel-indicator" role="tab" aria-label="Ir al slide 3" aria-selected="false"></button>
+            <button type="button" onclick="goToSlide(3)" class="carousel-indicator" role="tab" aria-label="Ir al slide 4" aria-selected="false"></button>
           </div>
         </div>
         <div id="icyrfq" data-nosnippet aria-label="Catálogo F2P — vista móvil" class="md:hidden overflow-x-auto -mx-6 px-6 pb-4">
@@ -1192,6 +1205,8 @@
         const indicators = document.querySelectorAll('.carousel-indicator');
         indicators.forEach((indicator, index) =>
         {
+          // v3.1.1 — sync aria-selected with active class para a11y
+          indicator.setAttribute('aria-selected', index === currentSlide ? 'true' : 'false');
           if (index === currentSlide)
           {
             indicator.classList.add('active');
@@ -1203,8 +1218,11 @@
         });
       }
 
-      // Language switcher functionality - DEFAULT TO ENGLISH
-      let currentLang = 'en';
+      // Language switcher functionality - DEFAULT TO SPANISH (matches <html lang="es">)
+      // ES is the canonical/indexable locale per Audit v3 Opcion B; EN is a UX toggle.
+      // Previously defaulted to 'en' which created a mismatch: crawlers indexed ES copy
+      // while real users saw EN copy. v3.1.1 fix.
+      let currentLang = 'es';
       const translations = {
         es:
         {},

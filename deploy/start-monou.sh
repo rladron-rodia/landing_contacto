@@ -22,7 +22,6 @@ APP_SECRET=$(aws secretsmanager get-secret-value \
   --secret-id monou/prod/app --query SecretString --output text)
 
 export DATABASE_URL=$(echo "$DB_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])")
-export RESEND_API_KEY=$(echo "$APP_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['RESEND_API_KEY'])")
 export ADMIN_TOKEN=$(echo "$APP_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['ADMIN_TOKEN'])")
 export FLASK_SECRET_KEY=$(echo "$APP_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['FLASK_SECRET_KEY'])")
 

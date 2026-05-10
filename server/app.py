@@ -1,26 +1,27 @@
 """
-Servidor Flask para procesar el formulario de contacto del frame "ixmppy"
-y enviarlo vía la API HTTP de Resend (https://resend.com).
+Servidor Flask para procesar el formulario de contacto de monoulabs.ai
+y enviarlo vía AWS SES (boto3 + IAM instance role).
 
-Por qué Resend en lugar de SMTP de Gmail:
-  Render free tier bloquea outbound SMTP (puertos 25/465/587 → timeout).
-  Resend va por HTTPS (puerto 443), que nunca se filtra.
+Stack 100% AWS-native desde v3.1.0. Migrado de Resend HTTP API a SES por
+boto3 con auth via instance role del EC2 (sin secrets externos).
 
 Variables de entorno:
-  RESEND_API_KEY  -> API key generada en https://resend.com/api-keys
-  MAIL_FROM       -> remitente. Ejemplos:
-                       "Monou Labs <onboarding@resend.dev>"        (default sin verificar dominio)
-                       "Monou Labs <contacto@monoulabs.ai>"        (requiere monoulabs.ai verificado en Resend)
-  MAIL_TO         -> destinatario(s) separados por coma
-  ALLOWED_ORIGIN  -> CORS, "*" o lista separada por coma
-  DATABASE_URL    -> Postgres (opcional; si falta, no se guardan contactos)
-  ADMIN_TOKEN     -> token Bearer para listar contactos vía /api/contacts
+  DATABASE_URL    -> Postgres connection string (RDS via Secrets Manager)
+  ADMIN_TOKEN     -> Bearer para endpoints /api/admin/* (Secrets Manager)
+  FLASK_SECRET_KEY-> firma signed tokens recovery + sesiones (Secrets Manager)
+  MAIL_FROM       -> remitente, ej. "Monou Labs <noreply@monoulabs.ai>" (Param Store)
+  MAIL_TO         -> destinatario(s) separados por coma (Param Store)
+  ALLOWED_ORIGIN  -> CORS, "*" o lista separada por coma (Param Store)
+  S3_BUCKET       -> bucket de imagenes (Param Store)
+  S3_REGION       -> region del bucket (Param Store)
+  EMAIL_PROVIDER  -> deprecated en v3.1.0 (era flag transitorio Resend↔SES)
 
-Limitación del plan free de Resend SIN dominio verificado:
-  - From debe ser onboarding@resend.dev (no puedes usar tu propio dominio)
-  - Solo puedes enviar TO el email con el que registraste la cuenta de Resend
-  Para producción real: verifica monoulabs.ai en https://resend.com/domains
-  y cambia MAIL_FROM a contacto@monoulabs.ai (o el alias que prefieras).
+AWS credentials: NO env vars — boto3 las toma del instance metadata via IMDSv2.
+
+SES setup requerido (una vez):
+  - Verificar dominio monoulabs.ai con DKIM (3 CNAMEs en Route 53)
+  - Custom MAIL FROM domain send.monoulabs.ai (MX + SPF en R53)
+  - IAM policy ses:SendEmail al EC2 role
 """
 
 import os

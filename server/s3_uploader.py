@@ -5,23 +5,23 @@ Uso desde el endpoint de upload:
     url = s3_uploader.upload(key, body, content_type="image/png")
 
 Decisiones de diseño:
-- Cliente boto3 lazy-init y cacheado en módulo. Render reusa el process,
-  evita rehacer handshake TLS por cada request.
+- Cliente boto3 lazy-init y cacheado en módulo. Reusa handshake TLS entre requests.
 - Cache-Control "public, max-age=31536000, immutable" porque las URLs de
   imágenes incluyen un hash del contenido (immutable safe).
 - Sin ACL en put_object — el bucket tiene Object Ownership = Bucket owner
   enforced (config moderna desde 2023), la visibilidad pública la maneja
   el bucket policy. Si pasáramos ACL="public-read" boto3 lanzaría
   AccessControlListNotSupported.
-- Las credenciales se leen vía boto3 default chain (env vars > ~/.aws/credentials >
-  IAM role). En Render quedan en env vars AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY
-  como secrets.
+- Las credenciales se leen vía boto3 default chain. En AWS EC2, el IAM
+  instance role provee credenciales via instance metadata (IMDSv2) — sin
+  env vars necesarias. La policy `backend-app-permissions` del role permite
+  s3:PutObject sobre `monou-landing-images-prod`.
 
-Configuración esperada vía env vars:
-    S3_BUCKET             — nombre del bucket destino (ej. monou-landing-images-prod)
-    S3_REGION             — región AWS (ej. us-east-1)
-    AWS_ACCESS_KEY_ID     — credencial del IAM user dedicado
-    AWS_SECRET_ACCESS_KEY — credencial del IAM user dedicado
+Configuración esperada vía env vars (sólo non-secret config):
+    S3_BUCKET             — nombre del bucket destino (Parameter Store)
+    S3_REGION             — región AWS (Parameter Store)
+
+NO requiere env vars de credentials — IAM instance role hace el trabajo.
 """
 
 import os
@@ -109,9 +109,16 @@ def upload(
 
 
 def is_configured() -> bool:
-    """Devuelve True si las env vars necesarias están seteadas."""
-    return bool(
-        os.getenv("S3_BUCKET")
-        and os.getenv("AWS_ACCESS_KEY_ID")
-        and os.getenv("AWS_SECRET_ACCESS_KEY")
-    )
+    """Devuelve True si la config necesaria para upload está disponible.
+
+    Sólo requiere S3_BUCKET en env (lo provee Parameter Store via wrapper).
+    Las credenciales AWS las maneja boto3 via default credential chain:
+    - En EC2: IAM instance role (sin env vars)
+    - En dev local: AWS_PROFILE, ~/.aws/credentials, o env vars
+
+    Si las creds faltan en runtime, el upload() lanzará S3UploadError con
+    mensaje específico — pero is_configured() no debe rechazar el endpoint
+    sólo por la ausencia de env vars de credentials, porque eso es esperado
+    en EC2 con instance role.
+    """
+    return bool(os.getenv("S3_BUCKET"))

@@ -7,6 +7,58 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ---
 
+## [3.1.1] — 2026-05-10
+
+### Patch — quick wins from security + performance/SEO audits
+
+Fixes priorizados de los reports `docs/SECURITY-AUDIT-v3.1.0.pdf` y
+`docs/PERFORMANCE-SEO-AUDIT-v3.1.0.pdf`.
+
+### Fixed
+
+- **🔴 Crítico — `deploy/start-monou.sh`** intentaba leer `RESEND_API_KEY` del
+  Secret que ya no existe (removido en v3.1.0). Con `set -euo pipefail`, el
+  próximo restart del service haría crash. **Eliminada la línea**.
+- **🟠 H-04 — `server/s3_uploader.py:is_configured()`** chequeaba env vars
+  `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` que NO existen en EC2 (instance
+  role provee credentials via IMDSv2). Resultado: `/api/admin/upload-image`
+  retornaba 500 en prod. Ahora sólo chequea `S3_BUCKET`; las creds las maneja
+  boto3 default chain.
+- **🟠 SEO HIGH-1 — `<html lang="es">` vs JS `currentLang='en'` mismatch**
+  (`index.html:1207`). Crawlers indexaban ES copy mientras users veían EN.
+  Default ahora a `'es'` para alinear canonical/lang/UI. EN sigue activo
+  como toggle UX.
+- **🟡 A11y HIGH-2 — Carousel buttons** (`index.html:709-710, 844-847`).
+  Reemplazados `<div onclick=>` por `<button type="button">` con `aria-label`
+  y `role="tab" / aria-selected="true|false"` en indicadores. CSS reset
+  agregado (appearance/padding/font/color) para que `<button>` renderice
+  pixel-perfect igual que el `<div>` original. Cumple WCAG 2.1.1 (Keyboard)
+  y 4.1.2 (Name, Role, Value).
+- **🟡 Perf HIGH-3a — Drop preload de `fa-solid-900.woff2`**
+  (`index.html:252`). 156 KB no estaba en LCP path y bloqueaba red para
+  Inter fonts críticos. Solo `fa-regular-400.woff2` (24 KB) sigue
+  preloadeado. Estimated saving: ~80-150 ms LCP en mobile slow-4G.
+
+### Updated
+
+- **`server/app.py` docstring**: actualizado para reflejar v3.1.0+ (sin
+  referencias obsoletas a Render free tier ni Resend HTTP API).
+- **`server/s3_uploader.py` docstring**: misma actualización.
+
+### Deferred to next iterations
+
+Findings que quedaron en roadmap (no v3.1.1):
+
+- **H-01** (IAM hardening): `monou-landing-deployer` con AdministratorAccess.
+  Programado v3.4.0 (Fase 9).
+- **H-02** (auth): Single shared `ADMIN_TOKEN` sin per-user audit.
+  Programado v3.2.0 (multi-user).
+- **H-03** (S3 bucket): `monou-landing-images-prod` público sin CloudFront/WAF.
+  Programado para v3.2.0 o más adelante.
+- **Perf HIGH-3b** (Tailwind purge): requiere build pipeline setup. Diferido.
+
+---
+
 ## [3.1.0] — 2026-05-10
 
 ### 🚀 Email migration: Resend → AWS SES (cierra promesa 100% AWS-native)
