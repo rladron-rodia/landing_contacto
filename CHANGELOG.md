@@ -7,6 +7,77 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ---
 
+## [3.2.0-rc3] — 2026-05-10
+
+### Per-user forgot/reset password + cleanup
+
+Cierra el flow del olvido-contraseña: ahora cada user puede recuperar
+su propia contraseña vía magic link enviado a SU email (no al MAIL_TO
+global). Elimina el wizard de bootstrap del UI público — ya no hace
+falta porque el sistema está bootstraped y el ADMIN_TOKEN ya no debe
+exponerse en `/admin/`.
+
+### Added
+
+**Backend** (`server/auth.py` + `server/app.py`):
+
+- `auth.set_user_password(user_id, password)` — actualiza password_hash.
+- `auth.generate_password_reset_token(user_id)` — signed-stateless token
+  HMAC-SHA256, 15min TTL, payload `user_id:expires:nonce`.
+- `auth.validate_password_reset_token(token)` — devuelve `(user_id, error)`.
+- `POST /api/auth/forgot-password { email }` — manda magic link al email
+  del user (vía SES, no a MAIL_TO global). Anti-enumeration: siempre
+  retorna 200 con mensaje genérico. Rate limit 3/h.
+- `POST /api/auth/reset-password { token, password }` — valida, cambia
+  password, **revoca todas las sesiones del user**, auto-login con cookie.
+
+**Frontend** (`admin/reset-password/index.html`):
+
+- Página standalone que lee `?id=<token>` del URL, form de nueva
+  contraseña con confirmación, POST `/api/auth/reset-password`,
+  auto-redirect a `/admin/` al éxito.
+- Estados: form / error (link inválido o expirado).
+
+### Changed
+
+**`admin/index.html`**:
+
+- **Bootstrap wizard removido** del UI público (`#bootstrap-view` + form).
+  Bootstrap inicial ya completado; si fuera necesario re-bootstrappear
+  (DB wipe, etc.) se hace por `curl POST /api/auth/bootstrap` con
+  ADMIN_TOKEN — no se expone en pantalla.
+
+**`admin/app.js`**:
+
+- Boot logic simplificada: solo `GET /api/auth/me` → showApp/showLogin.
+  Eliminados:
+  - Path legacy `?recover=<id>` (ADMIN_TOKEN exchange)
+  - Chequeo de bootstrap_done con wizard fallback
+  - Función `showBootstrap()`
+  - Handler de `#bootstrap-form`
+- "¿Olvidé contraseña?" ahora usa el email del input (login-email)
+  y llama a `/api/auth/forgot-password`. El email se envía a esa
+  dirección específica, no a MAIL_TO global.
+
+### Migration / deploy notes
+
+1. Endpoint legacy `/api/admin/request-token-recovery` y
+   `/api/admin/exchange-recovery` siguen ACTIVOS en backend (no se
+   eliminaron en este rc). Quedan deprecated y se borrarán en M5/v3.2.0
+   final junto con el ADMIN_TOKEN cleanup.
+
+2. Para que `forgot-password` funcione, el user necesita una `email`
+   válido en la tabla `users` (donde la app pueda mandar). En SES sandbox,
+   verifica el destinatario antes de probar.
+
+### Pending (M4 / M5)
+
+- M4: Audit log viewer en admin (super_admin only)
+- M5: Eliminar ADMIN_TOKEN del Secret + endpoints `/api/admin/*-recovery`
+  legacy. Tag v3.2.0 final.
+
+---
+
 ## [3.2.0-rc2] — 2026-05-10
 
 ### Frontend foundations — multi-user UI (M3)

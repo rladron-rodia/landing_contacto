@@ -67,55 +67,10 @@
     </div>
   </div>
 
-  <!-- ───── Bootstrap wizard (primer setup, solo si bootstrap_done=false) ───── -->
-  <div id="bootstrap-view" class="hidden min-h-screen items-center justify-center p-6">
-    <div class="w-full max-w-md bg-dark-800 border border-brand-500/30 rounded-2xl p-8">
-      <div class="flex items-center gap-3 mb-3">
-        <i class="fa-solid fa-rocket text-brand-400 text-2xl"></i>
-        <h1 class="text-2xl font-bold">Configurar tu cuenta</h1>
-      </div>
-      <p class="text-sm text-gray-400 mb-2">
-        Primer setup del admin. Vas a crear tu cuenta de <strong>super administrador</strong>.
-      </p>
-      <p class="text-xs text-gray-500 mb-6">
-        Usá tu <code class="bg-dark-900 px-1 py-0.5 rounded text-brand-400">ADMIN_TOKEN</code>
-        para autorizar este setup. Después de crearla, el token se desactiva.
-      </p>
-      <form id="bootstrap-form" class="space-y-4">
-        <div>
-          <label class="block text-gray-400 text-xs uppercase mb-1">ADMIN_TOKEN (autorización)</label>
-          <input id="bootstrap-token" type="password" autocomplete="off" required
-                 placeholder="Bearer token actual..."
-                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm font-mono focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
-        </div>
-        <div>
-          <label class="block text-gray-400 text-xs uppercase mb-1">Tu nombre completo</label>
-          <input id="bootstrap-fullname" type="text" required
-                 placeholder="Rodrigo Ladrón de Guevara"
-                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
-        </div>
-        <div>
-          <label class="block text-gray-400 text-xs uppercase mb-1">Tu email</label>
-          <input id="bootstrap-email" type="email" autocomplete="email" required
-                 placeholder="tu@email.com"
-                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
-        </div>
-        <div>
-          <label class="block text-gray-400 text-xs uppercase mb-1">
-            Contraseña <span class="text-gray-600">(mín. 8 caracteres)</span>
-          </label>
-          <input id="bootstrap-password" type="password" autocomplete="new-password" required minlength="8"
-                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
-        </div>
-        <button type="submit"
-                class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg transition-colors">
-          Crear cuenta y entrar
-        </button>
-        <p id="bootstrap-error" class="hidden text-xs text-red-400 text-center"></p>
-        <p id="bootstrap-info" class="hidden text-xs text-brand-400 text-center"></p>
-      </form>
-    </div>
-  </div>
+  <!-- v3.2.0-rc3: bootstrap wizard removido del UI público.
+       Bootstrap inicial ya completado. Si fuera necesario re-bootstrappear
+       (DB wipe, etc.) usar curl con ADMIN_TOKEN directamente:
+         POST /api/auth/bootstrap con Authorization: Bearer <token> -->
 
   <!-- ───── App ───── -->
   <div id="app-view" class="hidden min-h-screen flex">

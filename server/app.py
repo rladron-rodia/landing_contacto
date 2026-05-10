@@ -816,6 +816,151 @@ def auth_bootstrap_status():
     }), 200
 
 
+@app.route("/api/auth/forgot-password", methods=["POST"])
+@limiter.limit("3 per hour; 1 per 5 minutes")
+def auth_forgot_password():
+    """Manda magic link de password reset al email del user (si existe).
+
+    Body: { email: str }
+
+    Diseño anti-enumeration: SIEMPRE retorna 200 con mensaje genérico,
+    independientemente de si el user existe. El email solo se manda si
+    encontramos la cuenta. Evita revelar qué emails están registrados.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+
+    generic_response = jsonify({
+        "ok": True,
+        "message": "Si la cuenta existe, recibirás un email con el enlace en un momento.",
+    }), 200
+
+    if not email:
+        return generic_response
+
+    user = auth.get_user_by_email(email)
+    if not user or user.get("status") != "active":
+        # No revelamos si existe o no
+        return generic_response
+
+    try:
+        token = auth.generate_password_reset_token(user["id"])
+    except RuntimeError as e:
+        app.logger.error(f"Password reset disabled: {e}")
+        return generic_response
+
+    reset_url = f"https://monoulabs.ai/admin/reset-password/?id={token}"
+
+    subject = "[Monou Labs] Recuperación de contraseña"
+    user_name = user.get("full_name") or user["email"]
+    body_text = (
+        f"Hola {user_name},\n\n"
+        "Solicitaste recuperar tu contraseña en el panel de Monou Labs.\n\n"
+        f"Hace click en este enlace en los próximos 15 minutos para crear "
+        f"una nueva contraseña:\n{reset_url}\n\n"
+        "Si no solicitaste esto, ignora este correo. El enlace expira en "
+        "15 minutos y todas tus sesiones activas seguirán funcionando.\n"
+    )
+    body_html = f"""\
+<html>
+  <body style="font-family: Inter, Arial, sans-serif; color:#0B0E14;">
+    <h2 style="color:#0d9488;">Recuperación de contraseña — Monou Labs</h2>
+    <p>Hola <strong>{html.escape(user_name)}</strong>,</p>
+    <p>Solicitaste recuperar tu contraseña en el panel de Monou Labs.</p>
+    <p style="margin: 24px 0;">
+      <a href="{reset_url}"
+         style="background:#14b8a6;color:#fff;padding:12px 24px;
+                text-decoration:none;border-radius:8px;display:inline-block;
+                font-weight:600;">
+        Crear nueva contraseña
+      </a>
+    </p>
+    <p style="font-size:12px;color:#666;">
+      El enlace expira en 15 minutos. Si no solicitaste esto, ignora este
+      correo — tus sesiones activas siguen funcionando.
+    </p>
+    <p style="font-size:12px;color:#666;">
+      Si el botón no funciona, copia y pega esta URL:<br>
+      <code style="word-break:break-all;">{reset_url}</code>
+    </p>
+  </body>
+</html>"""
+
+    # Send via SES — usa _send_via_ses con override de "to" al email del user
+    try:
+        mail_from, _ = _email_routing()
+        _send_via_ses(mail_from, [user["email"]], subject,
+                      body_text, body_html, reply_to=None)
+        auth.audit("password.forgot_request", user_id=user["id"],
+                   ip=auth._client_ip(request),
+                   metadata={"email": user["email"]})
+    except Exception:
+        app.logger.exception("Failed to send password reset email")
+
+    return generic_response
+
+
+@app.route("/api/auth/reset-password", methods=["POST"])
+@limiter.limit("10 per hour; 5 per 5 minutes")
+def auth_reset_password():
+    """Valida token y setea nueva password. Auto-login.
+
+    Body: { token: str, password: str }
+
+    Side effects en éxito:
+    - Actualiza password_hash
+    - Revoca TODAS las sesiones existentes del user (force re-login en
+      otras pestañas/dispositivos)
+    - Crea sesión nueva → cookie
+    """
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    password = data.get("password") or ""
+
+    if not token or not password:
+        return jsonify({"ok": False, "error": "missing_input"}), 400
+
+    if len(password) < 8:
+        return jsonify({"ok": False, "error": "password_too_short",
+                        "min_length": 8}), 400
+
+    user_id, err = auth.validate_password_reset_token(token)
+    if err:
+        return jsonify({"ok": False, "error": "invalid_or_expired"}), 401
+
+    user = auth.get_user_by_id(user_id)
+    if not user or user.get("status") != "active":
+        return jsonify({"ok": False, "error": "user_unavailable"}), 401
+
+    try:
+        auth.set_user_password(user_id, password)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": "password_invalid",
+                        "detail": str(e)}), 400
+
+    # Revoca todas las sesiones (force re-login en otros devices)
+    revoked = auth.revoke_all_sessions(user_id)
+
+    # Auto-login: crea nueva sesión
+    sid = auth.create_session(
+        user_id,
+        ip=auth._client_ip(request),
+        user_agent=request.headers.get("User-Agent", "")[:500],
+    )
+    auth.update_last_login(user_id)
+    auth.audit("password.reset", user_id=user_id,
+               ip=auth._client_ip(request),
+               metadata={"sessions_revoked": revoked})
+
+    response = jsonify({
+        "ok": True,
+        "user": _user_to_public(user),
+        "permissions": auth.get_user_permissions(user_id),
+    })
+    auth.set_session_cookie(response, sid)
+    return response, 200
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # v3.2.0 — Users CRUD + invitations
 # ──────────────────────────────────────────────────────────────────────────

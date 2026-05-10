@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restablecer contraseña · Monou.gg</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans: ['Inter', 'sans-serif'] },
+        colors: {
+          brand: { 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e' },
+          dark:  { 900: '#0B0E14', 800: '#151A23', 700: '#1f2937' },
+        }
+      }}
+    }
+  </script>
+  <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-dark-900 text-gray-100 min-h-screen flex items-center justify-center p-6">
+
+  <div id="reset-state" class="w-full max-w-md bg-dark-800 border border-brand-500/30 rounded-2xl p-8">
+    <div class="flex items-center gap-3 mb-3">
+      <i class="fa-solid fa-key text-brand-400 text-2xl"></i>
+      <h1 class="text-2xl font-bold">Nueva contraseña</h1>
+    </div>
+    <p class="text-sm text-gray-400 mb-6">
+      Crea una nueva contraseña para tu cuenta. Las sesiones activas
+      en otros dispositivos se cerrarán automáticamente.
+    </p>
+
+    <form id="reset-form" class="space-y-4">
+      <div>
+        <label class="block text-gray-400 text-xs uppercase mb-1">
+          Nueva contraseña <span class="text-gray-600">(mín. 8 caracteres)</span>
+        </label>
+        <input id="reset-password" type="password" autocomplete="new-password" required minlength="8"
+               class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+      </div>
+      <div>
+        <label class="block text-gray-400 text-xs uppercase mb-1">Confirmar contraseña</label>
+        <input id="reset-password-confirm" type="password" autocomplete="new-password" required minlength="8"
+               class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+      </div>
+      <button type="submit"
+              class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg transition-colors">
+        Cambiar contraseña y entrar
+      </button>
+      <p id="reset-error" class="hidden text-xs text-red-400 text-center"></p>
+      <p id="reset-info" class="hidden text-xs text-brand-400 text-center"></p>
+    </form>
+
+    <p class="text-[11px] text-gray-600 text-center mt-6">
+      Este enlace expira 15 minutos después de haberlo solicitado.
+    </p>
+  </div>
+
+  <div id="error-state" class="hidden w-full max-w-md bg-dark-800 border border-red-500/30 rounded-2xl p-8 text-center">
+    <i class="fa-solid fa-circle-xmark text-red-400 text-3xl mb-3"></i>
+    <h1 class="text-xl font-semibold mb-2">Enlace inválido o expirado</h1>
+    <p id="error-detail" class="text-sm text-gray-400 mb-6">
+      El enlace puede haber sido usado, o expiró (válido 15 minutos).
+    </p>
+    <a href="/admin/" class="inline-block px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm rounded-lg">
+      Volver al login
+    </a>
+  </div>
+
+  <script>
+    const API_BASE = (function () {
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1") return "http://localhost:5000";
+      if (host === "monoulabs.ai" || host.endsWith(".monoulabs.ai")) return "https://api.monoulabs.ai";
+      return "";
+    })();
+
+    function $(s) { return document.querySelector(s); }
+    function show(id) {
+      ["reset-state", "error-state"].forEach(s =>
+        $("#" + s).classList.toggle("hidden", s !== id));
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("id");
+
+    if (!token) {
+      show("error-state");
+    }
+
+    $("#reset-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errEl = $("#reset-error");
+      const infoEl = $("#reset-info");
+      errEl.classList.add("hidden");
+      infoEl.classList.add("hidden");
+
+      if (!token) {
+        show("error-state");
+        return;
+      }
+
+      const pw = $("#reset-password").value;
+      const pwConfirm = $("#reset-password-confirm").value;
+      if (pw !== pwConfirm) {
+        errEl.textContent = "Las contraseñas no coinciden.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+      if (pw.length < 8) {
+        errEl.textContent = "Mínimo 8 caracteres.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+
+      infoEl.textContent = "Actualizando contraseña…";
+      infoEl.classList.remove("hidden");
+
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, password: pw }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.ok) {
+          infoEl.classList.add("hidden");
+          if (json.error === "invalid_or_expired") {
+            show("error-state");
+            return;
+          }
+          const msg = {
+            "password_too_short": "Contraseña muy corta.",
+            "password_invalid":   "Contraseña inválida.",
+            "user_unavailable":   "Esta cuenta ya no está disponible.",
+          }[json.error] || "No se pudo cambiar la contraseña.";
+          errEl.textContent = msg;
+          errEl.classList.remove("hidden");
+          return;
+        }
+        // OK: cookie ya seteada por backend
+        window.history.replaceState({}, "", "/admin/");
+        infoEl.textContent = "¡Listo! Redirigiendo al admin…";
+        setTimeout(() => { window.location.href = "/admin/"; }, 800);
+      } catch (e) {
+        infoEl.classList.add("hidden");
+        errEl.textContent = "Error de red. Intentá de nuevo.";
+        errEl.classList.remove("hidden");
+      }
+    });
+  </script>
+</body>
+</html>

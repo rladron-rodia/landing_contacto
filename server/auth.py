@@ -29,10 +29,14 @@ Recursos (8 pestañas + 1 meta):
     delivery, info_columns, analytics, users
 """
 
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Optional
@@ -478,6 +482,94 @@ def accept_invitation(token: str, password: str,
     update_last_login(user_id)
     sid = create_session(user_id, ip=ip, user_agent=user_agent)
     return user, sid, None
+
+
+def set_user_password(user_id: int, new_password: str) -> None:
+    """Cambia la password_hash del user. NO crea sesión.
+
+    Caller debe revocar sesiones existentes si es un reset (force re-login).
+    """
+    if not new_password or len(new_password) < 8:
+        raise ValueError("password debe tener al menos 8 caracteres")
+    pw_hash = hash_password(new_password)
+    with db.conn() as c, c.cursor() as cur:
+        cur.execute(
+            """UPDATE users
+                  SET password_hash = %s, updated_at = NOW()
+                WHERE id = %s""",
+            (pw_hash, user_id),
+        )
+
+
+# ─── Password reset (forgot/reset) ───────────────────────────────────────────
+#
+# Diseño signed-stateless similar al de admin token recovery legacy, pero
+# con user_id incluido en el payload para que cada usuario pueda recuperar
+# SU propia password (no compartida).
+#
+# Token format: base64url(payload + "." + hmac_sha256(payload))
+#   payload = "<user_id>:<expires_unix>:<nonce>"
+#
+# Single-use logical: aunque el token sea válido para todo su TTL, el
+# endpoint /reset-password revoca todas las sesiones del user y cambia la
+# password — efectivamente invalidando cualquier reuso del mismo link.
+
+PASSWORD_RESET_TTL_SECONDS = 15 * 60  # 15 min
+
+
+def _flask_secret_bytes() -> bytes:
+    """FLASK_SECRET_KEY como bytes para HMAC. Raise si no está configurado."""
+    secret = os.getenv("FLASK_SECRET_KEY", "").encode()
+    if len(secret) < 16:
+        raise RuntimeError(
+            "FLASK_SECRET_KEY missing or shorter than 16 bytes — "
+            "password reset disabled")
+    return secret
+
+
+def generate_password_reset_token(user_id: int,
+                                   ttl_seconds: int = PASSWORD_RESET_TTL_SECONDS) -> str:
+    """Genera token signed con user_id en payload."""
+    expires = int(time.time()) + int(ttl_seconds)
+    nonce = secrets.token_urlsafe(16)
+    payload = f"{int(user_id)}:{expires}:{nonce}".encode("ascii")
+    sig = hmac.new(_flask_secret_bytes(), payload, hashlib.sha256).digest()
+    raw = payload + b"." + sig
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def validate_password_reset_token(token: str) -> tuple[Optional[int], Optional[str]]:
+    """Devuelve (user_id, error_code). error_code='' si válido.
+
+    error_code: 'missing'|'malformed'|'bad_signature'|'expired'|
+                'server_misconfigured'
+    """
+    if not token or not isinstance(token, str):
+        return None, "missing"
+    try:
+        padded = token + "=" * (-len(token) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+    except Exception:
+        return None, "malformed"
+    if b"." not in raw:
+        return None, "malformed"
+    payload, sig = raw.rsplit(b".", 1)
+    try:
+        expected = hmac.new(_flask_secret_bytes(), payload,
+                             hashlib.sha256).digest()
+    except RuntimeError:
+        return None, "server_misconfigured"
+    if not hmac.compare_digest(sig, expected):
+        return None, "bad_signature"
+    try:
+        parts = payload.decode("ascii").split(":", 2)
+        user_id = int(parts[0])
+        expires = int(parts[1])
+    except Exception:
+        return None, "malformed"
+    if time.time() > expires:
+        return None, "expired"
+    return user_id, None
 
 
 def revoke_invitation(token: str) -> bool:

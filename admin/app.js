@@ -325,22 +325,11 @@
     if (emailInp) emailInp.focus();
   }
 
-  function showBootstrap(msg) {
-    $("#bootstrap-view").classList.remove("hidden");
-    $("#bootstrap-view").classList.add("flex");
-    $("#login-view").classList.add("hidden");
-    $("#app-view").classList.add("hidden");
-    if (msg) {
-      $("#bootstrap-error").textContent = msg;
-      $("#bootstrap-error").classList.remove("hidden");
-    } else {
-      $("#bootstrap-error").classList.add("hidden");
-    }
-  }
+  // v3.2.0-rc3: showBootstrap() removido. Bootstrap inicial se hace
+  // por curl con ADMIN_TOKEN si fuera necesario re-iniciar el sistema.
 
   function showApp() {
     $("#login-view").classList.add("hidden");
-    $("#bootstrap-view").classList.add("hidden");
     $("#app-view").classList.remove("hidden");
     $("#app-view").classList.add("flex");
 
@@ -697,84 +686,36 @@
     }
   });
 
-  // v3.2.0: bootstrap wizard — primer setup usando ADMIN_TOKEN
-  $("#bootstrap-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const errEl = $("#bootstrap-error");
-    const infoEl = $("#bootstrap-info");
-    errEl.classList.add("hidden");
-    infoEl.classList.add("hidden");
+  // v3.2.0-rc3: bootstrap wizard removido del UI público. Se hace con curl
+  // si fuera necesario re-bootstrappear (ver docs/V3.2.0-PLAN.md).
 
-    const token = $("#bootstrap-token").value.trim();
-    const email = $("#bootstrap-email").value.trim();
-    const fullname = $("#bootstrap-fullname").value.trim();
-    const password = $("#bootstrap-password").value;
-
-    if (!token || !email || !fullname || !password) return;
-    if (password.length < 8) {
-      errEl.textContent = "La contraseña debe tener al menos 8 caracteres.";
-      errEl.classList.remove("hidden");
-      return;
-    }
-
-    infoEl.textContent = "Creando cuenta…";
-    infoEl.classList.remove("hidden");
-
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/bootstrap`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ email, full_name: fullname, password }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.ok) {
-        infoEl.classList.add("hidden");
-        const msg = json.error === "email_already_used" ?
-            "Ese email ya está registrado." :
-          json.error === "password_too_short" ?
-            "Contraseña muy corta (mín 8)." :
-          json.error === "unauthorized" ?
-            "ADMIN_TOKEN inválido." :
-            "No se pudo crear la cuenta. Verificá los datos.";
-        errEl.textContent = msg;
-        errEl.classList.remove("hidden");
-        return;
-      }
-      _currentUser = json.user;
-      _currentPermissions = json.permissions || {};
-      // Limpiamos campos sensibles
-      $("#bootstrap-token").value = "";
-      $("#bootstrap-password").value = "";
-      showApp();
-    } catch (err) {
-      infoEl.classList.add("hidden");
-      errEl.textContent = "Error de red. Intentá de nuevo.";
-      errEl.classList.remove("hidden");
-    }
-  });
-
-  // ---------- Forgot token: request magic link ----------
+  // v3.2.0-rc3: forgot-password per-user.
+  // Manda magic link al email tipeado en el input (no al MAIL_TO global).
+  // Backend valida si el email tiene una cuenta active y, si la tiene,
+  // manda link a https://monoulabs.ai/admin/reset-password/?id=<token>.
   $("#forgot-token-btn").addEventListener("click", async () => {
     const errEl  = $("#login-error");
     const infoEl = $("#login-info");
     errEl.classList.add("hidden");
 
-    if (!confirm("¿Enviar un enlace de recuperación a tu email registrado?")) {
+    const email = ($("#login-email").value || "").trim();
+    if (!email) {
+      errEl.textContent = "Ingresa primero tu email arriba y luego haz click acá.";
+      errEl.classList.remove("hidden");
+      $("#login-email").focus();
       return;
     }
+
+    if (!confirm(`¿Enviar un enlace de recuperación a ${email}?`)) return;
 
     infoEl.textContent = "Enviando…";
     infoEl.classList.remove("hidden");
 
     try {
-      const res = await fetch(`${API_BASE}/api/admin/request-token-recovery`, {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({}),
+        body:    JSON.stringify({ email }),
       });
       if (res.status === 429) {
         infoEl.classList.add("hidden");
@@ -782,7 +723,7 @@
         errEl.classList.remove("hidden");
         return;
       }
-      // Backend siempre devuelve 200 con mensaje genérico (no info leak)
+      // Backend siempre 200 con mensaje genérico (no leak de qué emails existen)
       infoEl.textContent =
         "Si la cuenta existe, recibirás un email con el enlace en un momento.";
     } catch (e) {
@@ -2143,69 +2084,14 @@
     });
   }
 
-  // ---------- Boot (v3.2.0) ----------
-  // Flujo:
-  //   1. Si bootstrap_done=false → mostrar wizard de bootstrap
-  //   2. Sino → GET /api/auth/me (vía cookie). Si OK → showApp(). Si 401 → showLogin()
-  //   3. Legacy: ?recover=<id> sigue funcionando como path de fallback
-  //      (magic link que el sistema viejo manda). Va a quedar habilitado hasta
-  //      que se elimine /api/admin/exchange-recovery en una versión futura.
+  // ---------- Boot (v3.2.0-rc3) ----------
+  // Flujo simple:
+  //   1. GET /api/auth/me (envía cookie). Si OK → showApp().
+  //   2. Sino → showLogin().
+  //
+  // Páginas de invitation accept (/admin/invitation/) y password reset
+  // (/admin/reset-password/) son standalone — no pasan por este boot.
   (async function boot() {
-    const params = new URLSearchParams(window.location.search);
-    const recoveryId = params.get("recover");
-
-    // Path legacy: ?recover=<id> (ADMIN_TOKEN-based). Solo válido pre-bootstrap.
-    if (recoveryId) {
-      window.history.replaceState({}, "", window.location.pathname);
-      showLogin();
-      const errEl  = $("#login-error");
-      const infoEl = $("#login-info");
-      infoEl.textContent = "Verificando enlace de recuperación…";
-      infoEl.classList.remove("hidden");
-      try {
-        const res = await fetch(`${API_BASE}/api/admin/exchange-recovery`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ recovery_id: recoveryId }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (res.ok && json.ok && json.admin_token) {
-          // Solo funciona si bootstrap_done=false. Tras ello el endpoint
-          // del backend retorna 500/401 igual.
-          infoEl.classList.add("hidden");
-          // Pre-bootstrap: muestra el wizard pre-poblando token
-          $("#bootstrap-token").value = json.admin_token;
-          showBootstrap();
-          return;
-        }
-        infoEl.classList.add("hidden");
-        errEl.textContent = "Enlace inválido o expirado.";
-        errEl.classList.remove("hidden");
-      } catch (e) {
-        infoEl.classList.add("hidden");
-        errEl.textContent = "Error de red al validar el enlace.";
-        errEl.classList.remove("hidden");
-      }
-      return;
-    }
-
-    // Path normal: chequear bootstrap_done y session.
-    try {
-      const bsRes = await fetch(`${API_BASE}/api/auth/bootstrap-status`, {
-        credentials: "include",
-      });
-      const bsJson = await bsRes.json().catch(() => ({}));
-      if (!bsJson.bootstrap_done) {
-        showBootstrap();
-        return;
-      }
-    } catch (e) {
-      // Si no podemos chequear el status, default a login
-      showLogin();
-      return;
-    }
-
-    // bootstrap_done=true → intentar /api/auth/me con cookie
     try {
       const meRes = await fetch(`${API_BASE}/api/auth/me`, {
         credentials: "include",
