@@ -369,6 +369,19 @@ Comparado con Render ($0 free tier hasta dormido): mayor costo pero gana siempre
 
 ---
 
+## Disaster Recovery
+
+Si algo se rompe, ver [`docs/DISASTER-RECOVERY.md`](docs/DISASTER-RECOVERY.md). Cubre:
+- Inventario crítico (qué existe, dónde, qué credentials viven dónde)
+- Backups automáticos (RDS 7d, S3 versionado, etc.) y manuales recomendados
+- 8 escenarios de recuperación con comandos exactos (Mac muere, EC2 caído,
+  RDS corrupto, frontend roto, GitHub inaccesible, AWS comprometido, ADMIN_TOKEN
+  perdido, migración a otro proveedor)
+- Cómo regenerar `monou-vars.sh` desde cero usando solo APIs de AWS
+- Checklist preventivo mensual
+
+---
+
 ## Pendientes / Roadmap
 
 ### Completados después del cierre v3.0.0

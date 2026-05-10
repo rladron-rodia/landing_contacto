@@ -31,6 +31,10 @@ durante ~48h y luego se suspende.
   deploy workflow, troubleshooting, costos).
 - **Plan original de migración** archivado en `docs/MIGRACION-AWS-PLAN.md` con
   disclaimer de discrepancias contra la realidad final.
+- **Disaster recovery runbook** en `docs/DISASTER-RECOVERY.md`: inventario crítico,
+  backups automáticos vs manuales, 8 escenarios de recuperación con comandos,
+  checklist preventivo mensual. Defensa en profundidad para retomar el proyecto
+  rápido si algo falla.
 
 ### Changed
 
