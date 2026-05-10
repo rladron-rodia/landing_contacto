@@ -38,7 +38,7 @@
       </div>
       <p class="text-sm text-gray-400 mb-6">
         Pega tu <code class="bg-dark-900 px-1 py-0.5 rounded text-brand-400">ADMIN_TOKEN</code>
-        (configurado en Render → Environment) para entrar.
+        para entrar.
       </p>
       <form id="login-form" class="space-y-4">
         <input id="token-input" type="password" autocomplete="off" required
@@ -49,6 +49,13 @@
           Entrar
         </button>
         <p id="login-error" class="hidden text-xs text-red-400 text-center"></p>
+        <p id="login-info" class="hidden text-xs text-brand-400 text-center"></p>
+        <div class="text-center pt-2">
+          <button type="button" id="forgot-token-btn"
+                  class="text-xs text-gray-400 hover:text-brand-400 underline transition-colors">
+            ¿Olvidé mi token?
+          </button>
+        </div>
       </form>
     </div>
   </div>
