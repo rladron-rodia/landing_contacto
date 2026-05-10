@@ -401,43 +401,24 @@ def health():
 
 
 def _is_admin(req) -> bool:
-    """Valida que el request tenga credenciales de admin.
+    """Valida que el request tenga credenciales de admin (cookie session).
 
-    v3.2.0+: acepta DOS paths simultáneamente:
-      1. Cookie de sesión (sistema multi-usuario nuevo). Cualquier user
-         con role super_admin/admin pasa. Editor también pasa pero la
-         autorización fina la dan los decoradores @require_permission.
-         Como los endpoints legacy /api/admin/* usan _is_admin como gate
-         binario, treat editor como admin solo si tiene CUALQUIER permiso
-         (sino, no debería siquiera ver el admin panel).
-      2. Bearer ADMIN_TOKEN (legacy). Sigue activo durante la transición.
-         Solo válido si bootstrap_done=false; después se desactiva auto.
+    v3.2.0 final: solo acepta cookie session HttpOnly. El path legacy
+    Bearer ADMIN_TOKEN fue removido. Excepción: el endpoint
+    /api/auth/bootstrap aún acepta Bearer ADMIN_TOKEN, pero solo si
+    bootstrap_done=false (pre-setup). Ese endpoint chequea `_is_admin`
+    pero también gatea con `is_bootstrap_done()` antes.
 
-    Path orden: cookie primero (más usuarios), luego token (escape hatch).
-
-    Sigue usando hmac.compare_digest para path token (timing-safe).
+    Niveles de acceso admitidos por este gate binario:
+      - super_admin / admin → True (acceso completo a /api/admin/*)
+      - editor → True (los endpoints específicos chequean
+        @require_permission para autorización fina)
+      - sin sesión, disabled, pending → False
     """
-    # Path 1: Cookie session (v3.2.0)
     user = auth.get_current_user(req)
-    if user and user.get("status") == "active":
-        # Super_admin y admin tienen acceso completo a /api/admin/*
-        if user.get("role") in ("super_admin", "admin"):
-            return True
-        # Editor: lo dejamos pasar el gate binario; los endpoints específicos
-        # van a chequear su permission con @require_permission.
-        if user.get("role") == "editor":
-            return True
-
-    # Path 2: Bearer ADMIN_TOKEN (legacy, solo válido pre-bootstrap)
-    if auth.is_bootstrap_done():
-        # Después del bootstrap, ADMIN_TOKEN se desactiva. Solo cookie.
+    if not user or user.get("status") != "active":
         return False
-    token = os.getenv("ADMIN_TOKEN", "")
-    if not token:
-        return False
-    authz = req.headers.get("Authorization", "")
-    expected = f"Bearer {token}"
-    return hmac.compare_digest(authz, expected)
+    return user.get("role") in ("super_admin", "admin", "editor")
 
 
 def _unauthorized():
@@ -461,161 +442,24 @@ def list_contacts():
 
 
 # --------------------------------------------------------------------------
-# Admin token recovery — magic link via email (público, rate-limited)
+# Email helper (compartido por recovery, invitations, forgot-password)
 #
-# Flujo:
-#   1) Cliente hace POST /api/admin/request-token-recovery (sin auth)
-#   2) Backend genera recovery_id firmado HMAC con FLASK_SECRET_KEY (15 min)
-#   3) Backend envía email a MAIL_TO con link https://.../admin/?recover=<id>
-#   4) Cliente abre el link → frontend hace POST /api/admin/exchange-recovery
-#      con el recovery_id → backend valida y devuelve ADMIN_TOKEN
-#   5) Frontend autollena el form y entra al admin
-#
-# El recovery_id es signed-stateless (no necesitamos DB ni state compartido).
-# Se puede usar múltiples veces dentro de los 15 min — aceptable porque sólo
-# llega via email a MAIL_TO.
+# v3.2.0 final: los endpoints legacy /api/admin/request-token-recovery y
+# /api/admin/exchange-recovery (ADMIN_TOKEN-based) fueron ELIMINADOS.
+# El forgot-password ahora usa /api/auth/forgot-password con magic link
+# per-user al email del user (ver bloque "v3.2.0 — multi-usuario" abajo).
 # --------------------------------------------------------------------------
-
-RECOVERY_EXPIRES_IN_SECONDS = 15 * 60
-
-
-def _recovery_secret() -> bytes:
-    """Devuelve FLASK_SECRET_KEY como bytes para HMAC."""
-    secret = os.getenv("FLASK_SECRET_KEY", "").encode()
-    if len(secret) < 16:
-        raise RuntimeError(
-            "FLASK_SECRET_KEY missing or shorter than 16 bytes — recovery disabled")
-    return secret
-
-
-def _generate_recovery_id(expires_in: int = RECOVERY_EXPIRES_IN_SECONDS) -> str:
-    """Genera token firmado: base64url(payload + '.' + hmac_sha256(payload))."""
-    expires_at = int(time.time()) + int(expires_in)
-    nonce = secrets.token_urlsafe(16)
-    payload = f"{expires_at}:{nonce}".encode("ascii")
-    sig = hmac.new(_recovery_secret(), payload, hashlib.sha256).digest()
-    raw = payload + b"." + sig
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-
-
-def _validate_recovery_id(token: str) -> tuple[bool, str]:
-    """Devuelve (valid, error_code). error_code es '' si valid=True."""
-    if not token or not isinstance(token, str):
-        return False, "missing"
-    try:
-        padded = token + "=" * (-len(token) % 4)
-        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
-    except Exception:
-        return False, "malformed"
-    if b"." not in raw:
-        return False, "malformed"
-    payload, sig = raw.rsplit(b".", 1)
-    try:
-        expected_sig = hmac.new(
-            _recovery_secret(), payload, hashlib.sha256).digest()
-    except RuntimeError:
-        return False, "server_misconfigured"
-    if not hmac.compare_digest(sig, expected_sig):
-        return False, "bad_signature"
-    try:
-        expires_at_str, _nonce = payload.decode("ascii").split(":", 1)
-        expires_at = int(expires_at_str)
-    except Exception:
-        return False, "malformed"
-    if time.time() > expires_at:
-        return False, "expired"
-    return True, ""
 
 
 def _send_simple_email(subject: str, body_text: str, body_html: str) -> dict:
-    """Helper para emails non-contact-form (token recovery, alertas internas)."""
+    """Helper para emails que van a MAIL_TO (alertas internas).
+
+    Para emails per-user (invitations, password reset), usar `_send_via_ses`
+    directamente con override de `to=[user_email]`.
+    """
     mail_from, mail_to = _email_routing()
     return _send_via_ses(mail_from, mail_to, subject, body_text, body_html,
                          reply_to=None)
-
-
-@app.route("/api/admin/request-token-recovery", methods=["POST"])
-@limiter.limit("3 per hour; 1 per 5 minutes")
-def request_token_recovery():
-    """Genera recovery link y lo envía a MAIL_TO. Siempre retorna 200 (no leak)."""
-    if not os.getenv("ADMIN_TOKEN") or not os.getenv("FLASK_SECRET_KEY"):
-        app.logger.warning(
-            "Recovery request received but ADMIN_TOKEN or FLASK_SECRET_KEY missing")
-        return jsonify({
-            "ok": True,
-            "message": "Si la cuenta existe, recibirás un correo en breve."
-        }), 200
-
-    try:
-        recovery_id = _generate_recovery_id()
-    except RuntimeError as e:
-        app.logger.error(f"Recovery generation failed: {e}")
-        return jsonify({
-            "ok": True,
-            "message": "Si la cuenta existe, recibirás un correo en breve."
-        }), 200
-
-    # URL absoluta — usamos monoulabs.ai como host canónico de admin.
-    recovery_url = f"https://monoulabs.ai/admin/?recover={recovery_id}"
-
-    subject = "[Monou Labs] Recuperación de acceso al admin"
-    body_text = (
-        "Solicitaste recuperar tu acceso al admin de Monou Labs.\n\n"
-        f"Haz click en este enlace en los próximos 15 minutos para acceder:\n"
-        f"{recovery_url}\n\n"
-        "Si no solicitaste esto, ignora este correo. "
-        "El enlace expira en 15 minutos.\n"
-    )
-    body_html = f"""\
-<html>
-  <body style="font-family: Inter, Arial, sans-serif; color:#0B0E14;">
-    <h2 style="color:#0d9488;">Recuperación de acceso — Monou Labs</h2>
-    <p>Solicitaste recuperar tu acceso al admin.</p>
-    <p style="margin: 24px 0;">
-      <a href="{recovery_url}"
-         style="background:#14b8a6;color:#fff;padding:12px 24px;
-                text-decoration:none;border-radius:8px;display:inline-block;">
-        Acceder al admin
-      </a>
-    </p>
-    <p style="font-size:12px;color:#666;">
-      El enlace expira en 15 minutos. Si no solicitaste esto, ignora este correo.
-    </p>
-    <p style="font-size:12px;color:#666;">
-      Si el botón no funciona, copia y pega esta URL:<br>
-      <code style="word-break:break-all;">{recovery_url}</code>
-    </p>
-  </body>
-</html>"""
-
-    try:
-        _send_simple_email(subject, body_text, body_html)
-    except EmailError as e:
-        app.logger.error(f"Failed to send recovery email: {e}")
-        # Aún así retornamos 200 para no leakear si MAIL_TO existe.
-
-    return jsonify({
-        "ok": True,
-        "message": "Si la cuenta existe, recibirás un correo en breve."
-    }), 200
-
-
-@app.route("/api/admin/exchange-recovery", methods=["POST"])
-@limiter.limit("10 per hour; 5 per 5 minutes")
-def exchange_recovery():
-    """Valida recovery_id y devuelve ADMIN_TOKEN para auto-login."""
-    data = request.get_json(silent=True) or {}
-    recovery_id = (data.get("recovery_id") or "").strip()
-
-    valid, err = _validate_recovery_id(recovery_id)
-    if not valid:
-        return jsonify({"ok": False, "error": "invalid_or_expired"}), 401
-
-    token = os.getenv("ADMIN_TOKEN", "")
-    if not token:
-        return jsonify({"ok": False, "error": "admin_not_configured"}), 500
-
-    return jsonify({"ok": True, "admin_token": token}), 200
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -742,7 +586,16 @@ def auth_bootstrap():
         # No leakear si bootstrap ya pasó (404 idéntico a endpoint inexistente)
         return jsonify({"ok": False, "error": "not_found"}), 404
 
-    if not _is_admin(request):
+    # Bootstrap es el ÚNICO endpoint que aún acepta Bearer ADMIN_TOKEN.
+    # Por diseño: si bootstrap_done=false, no hay users en DB todavía, así
+    # que la cookie session no puede existir. ADMIN_TOKEN sirve para que
+    # el operador autorice la creación del primer super_admin.
+    admin_token_env = os.getenv("ADMIN_TOKEN", "")
+    if not admin_token_env:
+        return jsonify({"ok": False,
+                        "error": "admin_token_not_configured"}), 500
+    authz = request.headers.get("Authorization", "")
+    if not hmac.compare_digest(authz, f"Bearer {admin_token_env}"):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
     data = request.get_json(silent=True) or {}
@@ -1377,6 +1230,101 @@ def invitations_accept(token: str):
     })
     auth.set_session_cookie(response, sid)
     return response, 200
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# v3.2.0 M4 — Audit log viewer
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def _parse_iso_datetime(s):
+    """Parse ISO 8601 string. Devuelve datetime o None si vacío/inválido."""
+    if not s:
+        return None
+    try:
+        # Acepta YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS, ISO con Z, etc.
+        s = s.strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        from datetime import datetime
+        return datetime.fromisoformat(s)
+    except (ValueError, TypeError):
+        return None
+
+
+@app.route("/api/audit-log", methods=["GET"])
+@auth.require_role("super_admin")
+def audit_log_list():
+    """Lista entries de audit_log. Solo super_admin.
+
+    Query params:
+      action: filtro exacto, o prefix si termina en '.' (ej. 'login.')
+      user_id: int
+      since, until: ISO 8601 timestamps
+      limit: 1-200, default 50
+      offset: default 0
+    """
+    action = request.args.get("action")
+    user_id_raw = request.args.get("user_id")
+    user_id = int(user_id_raw) if user_id_raw and user_id_raw.isdigit() else None
+    since = _parse_iso_datetime(request.args.get("since"))
+    until = _parse_iso_datetime(request.args.get("until"))
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+    except (TypeError, ValueError):
+        limit, offset = 50, 0
+
+    rows, total = auth.list_audit_log(
+        action=action, user_id=user_id, since=since, until=until,
+        limit=limit, offset=offset,
+    )
+
+    # Serialize datetimes + IPs
+    for r in rows:
+        if r.get("created_at"):
+            r["created_at"] = r["created_at"].isoformat()
+        # ip_address es psycopg.types.IPv4Address — convertir a string
+        if r.get("ip_address") is not None:
+            r["ip_address"] = str(r["ip_address"])
+
+    return jsonify({
+        "ok": True,
+        "count": len(rows),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "entries": rows,
+    }), 200
+
+
+@app.route("/api/audit-log/actions", methods=["GET"])
+@auth.require_role("super_admin")
+def audit_log_actions():
+    """Lista las actions distinct presentes en el log. Para filter dropdown."""
+    return jsonify({"ok": True, "actions": auth.list_distinct_actions()}), 200
+
+
+@app.route("/api/admin/audit-cleanup", methods=["POST"])
+@auth.require_role("super_admin")
+def audit_log_cleanup():
+    """Purga entries > 90 días. Manual run (super_admin).
+
+    Para automatización: programar como SSM scheduled task, ej:
+      aws ssm put-parameter ... y trigger nocturno por EventBridge.
+    Por ahora se ejecuta manualmente desde la UI o curl.
+    """
+    data = request.get_json(silent=True) or {}
+    days = int(data.get("retention_days") or 90)
+    if days < 7:
+        return jsonify({"ok": False, "error": "retention_min_7_days"}), 400
+    deleted = auth.cleanup_old_audit_logs(days)
+    actor = auth.get_current_user(request)
+    auth.audit("audit_log.cleanup", user_id=actor["id"],
+               metadata={"retention_days": days, "deleted_count": deleted},
+               ip=auth._client_ip(request))
+    return jsonify({"ok": True, "deleted_count": deleted,
+                    "retention_days": days}), 200
 
 
 # ---------------------------------------------------------------------------

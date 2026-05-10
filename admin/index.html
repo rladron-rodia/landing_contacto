@@ -136,6 +136,12 @@
           <i class="fa-solid fa-users w-4 flex-shrink-0"></i>
           <span class="nav-label flex-1 truncate">Usuarios</span>
         </button>
+        <!-- v3.2.0 M4: Audit Log — solo super_admin -->
+        <button data-view="audit" data-requires-role="super_admin"
+                class="nav-btn nav-audit group w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5 hidden">
+          <i class="fa-solid fa-clipboard-list w-4 flex-shrink-0"></i>
+          <span class="nav-label flex-1 truncate">Audit log</span>
+        </button>
       </nav>
       <!-- v3.2.0: user info en footer del sidebar -->
       <div class="p-3 border-t border-white/10 space-y-2">
@@ -632,6 +638,95 @@
                   <tbody id="cta-tags-tbody" class="divide-y divide-white/5"></tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── v3.2.0 M4: Audit log view (super_admin) ─── -->
+      <section id="audit-view" class="hidden">
+        <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
+          <div class="px-6 py-4 flex items-center gap-4">
+            <i class="fa-solid fa-clipboard-list text-brand-400"></i>
+            <h1 class="text-lg font-semibold">Audit log</h1>
+            <span id="audit-count" class="text-xs bg-dark-900 px-2 py-1 rounded-full text-gray-400"></span>
+            <div class="ml-auto flex items-center gap-3">
+              <button id="audit-refresh"
+                      class="px-3 py-1.5 bg-dark-900 hover:bg-white/5 rounded-lg text-sm text-gray-300 flex items-center gap-2">
+                <i class="fa-solid fa-arrows-rotate"></i> Refrescar
+              </button>
+              <button id="audit-cleanup-btn"
+                      class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 rounded-lg text-sm text-red-300 flex items-center gap-2"
+                      title="Purgar entries > 90 días">
+                <i class="fa-solid fa-broom"></i> Purgar > 90d
+              </button>
+            </div>
+          </div>
+        </header>
+        <div class="p-6 space-y-4">
+          <!-- Filtros -->
+          <div class="bg-dark-800 border border-white/10 rounded-xl p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-[10px] uppercase text-gray-400 mb-1">Acción</label>
+              <select id="audit-filter-action"
+                      class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] uppercase text-gray-400 mb-1">Usuario</label>
+              <select id="audit-filter-user"
+                      class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] uppercase text-gray-400 mb-1">Desde</label>
+              <input type="date" id="audit-filter-since"
+                     class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="block text-[10px] uppercase text-gray-400 mb-1">Hasta</label>
+              <input type="date" id="audit-filter-until"
+                     class="w-full bg-dark-900 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+            </div>
+          </div>
+
+          <p class="text-xs text-gray-500">
+            Trail de acciones críticas (login, user CRUD, password changes, etc).
+            Retention 90 días — entries más viejas se borran al purgar manualmente.
+          </p>
+
+          <div class="bg-dark-800 border border-white/10 rounded-xl overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-dark-900 text-xs uppercase text-gray-400">
+                <tr>
+                  <th class="px-4 py-3 text-left">Fecha</th>
+                  <th class="px-4 py-3 text-left">Usuario</th>
+                  <th class="px-4 py-3 text-left">Acción</th>
+                  <th class="px-4 py-3 text-left">Recurso</th>
+                  <th class="px-4 py-3 text-left">IP</th>
+                  <th class="px-4 py-3 text-right">Detalle</th>
+                </tr>
+              </thead>
+              <tbody id="audit-tbody" class="divide-y divide-white/5">
+                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Cargando…</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div class="flex items-center justify-between text-xs text-gray-400">
+            <div id="audit-pagination-info">—</div>
+            <div class="flex items-center gap-2">
+              <button id="audit-prev"
+                      class="px-3 py-1.5 bg-dark-900 hover:bg-white/5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed">
+                ‹ Anterior
+              </button>
+              <button id="audit-next"
+                      class="px-3 py-1.5 bg-dark-900 hover:bg-white/5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed">
+                Siguiente ›
+              </button>
             </div>
           </div>
         </div>
@@ -1309,6 +1404,20 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ───── v3.2.0 M4: Modal detalle de audit log entry ───── -->
+  <div id="audit-modal" class="hidden fixed inset-0 z-20 bg-black/70 flex items-center justify-center p-6">
+    <div class="bg-dark-800 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-white/10 flex items-center gap-3">
+        <i class="fa-solid fa-clipboard-list text-brand-400"></i>
+        <h2 class="text-lg font-semibold">Detalle del evento</h2>
+        <button class="modal-close ml-auto text-gray-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+      <div id="audit-modal-body" class="p-6 space-y-3 text-sm"></div>
     </div>
   </div>
 

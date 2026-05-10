@@ -7,6 +7,103 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ---
 
+## [3.2.0] — 2026-05-10
+
+### Multi-user system — final release
+
+Cierra el ciclo del feature multi-usuario que arrancó con rc1. Suma audit
+log viewer para super_admin (M4) y limpia los paths legacy de ADMIN_TOKEN
+recovery (M5). El sistema queda 100% basado en cookies session, con
+ADMIN_TOKEN solo activo para re-bootstrap (no usado en flujos normales).
+
+### Added
+
+**M4 — Audit log viewer:**
+
+- `auth.list_audit_log(action, user_id, since, until, limit, offset)` —
+  query con filtros + JOIN a users.email para mostrar quién hizo qué.
+- `auth.list_distinct_actions()` — lista de actions únicas para dropdown.
+- `GET /api/audit-log` (super_admin) — endpoint paginado con filtros.
+- `GET /api/audit-log/actions` (super_admin) — distinct actions.
+- `POST /api/admin/audit-cleanup` (super_admin) — purga > 90d manualmente.
+- **Frontend**: nueva pestaña "Audit log" (super_admin only):
+  - Filtros: action dropdown, user dropdown, fechas desde/hasta
+  - Tabla paginada (50/página) con timestamp, user, action badge, recurso, IP
+  - Modal de detalle con metadata JSON pretty-printed
+  - Botón "Purgar > 90d" para cleanup manual
+- Action badges color-coded por tipo (login.success verde,
+  login.failed rojo, user.disable rojo, etc.)
+
+**Documentación:**
+
+- `docs/USER-MANAGEMENT.md` — guía completa de roles, permissions,
+  flujos de invitación, recovery de password, audit log, operations.
+
+### Changed / Removed (M5 — cleanup)
+
+**Backend** (`server/app.py`):
+
+- **REMOVED** endpoint `/api/admin/request-token-recovery` (legacy
+  pre-v3.2.0). Reemplazado por `/api/auth/forgot-password` per-user.
+- **REMOVED** endpoint `/api/admin/exchange-recovery` (legacy
+  pre-v3.2.0). El flow `?recover=<id>` ya no existe.
+- **REMOVED** helpers `_recovery_secret`, `_generate_recovery_id`,
+  `_validate_recovery_id`, constante `RECOVERY_EXPIRES_IN_SECONDS`.
+- **`_is_admin(req)` simplificado**: solo path cookie. El path Bearer
+  ADMIN_TOKEN fue eliminado. Excepción: `/api/auth/bootstrap` aún acepta
+  Bearer ADMIN_TOKEN, pero solo si `bootstrap_done=false`.
+- `_send_simple_email()` retenido (lo usa /api/auth/forgot-password
+  para emails per-user).
+
+### Migration / deploy notes
+
+1. **ALLOWED_ORIGIN** debe estar configurado correctamente (sin `*`):
+   ```bash
+   aws ssm get-parameter --name /monou/prod/ALLOWED_ORIGIN
+   # Esperado: "https://monoulabs.ai,https://www.monoulabs.ai"
+   ```
+
+2. **Deploy normal**: `./deploy.sh v3.2.0 && ./deploy-frontend.sh`
+
+3. **Optional: borrar ADMIN_TOKEN del Secret** (recomendado tras 1-2
+   semanas de operación estable, una vez confirmado que el sistema
+   multi-user funciona sin issues):
+   ```bash
+   # 1. Lee el secret actual
+   aws secretsmanager get-secret-value --secret-id monou/prod/app \
+     --query SecretString --output text > /tmp/secret.json
+
+   # 2. Edita /tmp/secret.json y borra la línea "ADMIN_TOKEN": "..."
+   # (deja FLASK_SECRET_KEY y otras claves)
+   nano /tmp/secret.json
+
+   # 3. Aplica
+   aws secretsmanager update-secret --secret-id monou/prod/app \
+     --secret-string file:///tmp/secret.json
+
+   # 4. Limpia
+   shred -u /tmp/secret.json
+   ```
+   Ver `docs/USER-MANAGEMENT.md` para detalles. Borrar ADMIN_TOKEN deja
+   el sistema 100% sin tokens compartidos. Re-bootstrap (DB wipe) requiere
+   reagregar ADMIN_TOKEN al Secret antes.
+
+4. **Smoke test post-deploy**:
+   - Login con super_admin → ✓
+   - Pestaña Usuarios visible → ✓
+   - Pestaña Audit log visible (solo super_admin) → ✓
+   - Filtrar por action `login.success` → ver mi último login
+   - `/admin/?recover=xxx` ya no debe funcionar (404 o redirect a login)
+
+### Roadmap post-v3.2.0
+
+- **v3.3.0**: Monitoring/alerting (CloudWatch alarms, SNS topic)
+- **v3.4.0**: IAM hardening — downgrade `monou-landing-deployer` de
+  AdministratorAccess a least-privilege
+- **v3.2.x** (eventual): 2FA TOTP opcional para super_admin/admin
+
+---
+
 ## [3.2.0-rc3] — 2026-05-10
 
 ### Per-user forgot/reset password + cleanup

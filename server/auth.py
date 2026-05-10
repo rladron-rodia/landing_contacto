@@ -823,6 +823,94 @@ def cleanup_old_audit_logs(retention_days: int = 90) -> int:
         return cur.rowcount
 
 
+def list_audit_log(
+    *,
+    action: Optional[str] = None,
+    user_id: Optional[int] = None,
+    since: Optional[datetime] = None,
+    until: Optional[datetime] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Lista entries de audit_log con filtros opcionales.
+
+    Devuelve (rows, total_count). Joins users.email para mostrar quién hizo qué.
+
+    action: filtro por action exacta o prefix (e.g. 'login.' matches login.success/failed).
+    user_id: filtro por actor user.
+    since/until: rango de created_at (timezone-aware datetimes).
+    limit: max 200.
+    """
+    if not db.is_enabled():
+        return [], 0
+
+    limit = max(1, min(int(limit or 50), 200))
+    offset = max(0, int(offset or 0))
+
+    where_clauses = []
+    params = []
+
+    if action:
+        # Prefix match si termina en '.', sino exacto
+        if action.endswith("."):
+            where_clauses.append("a.action LIKE %s")
+            params.append(action + "%")
+        else:
+            where_clauses.append("a.action = %s")
+            params.append(action)
+    if user_id is not None:
+        where_clauses.append("a.user_id = %s")
+        params.append(int(user_id))
+    if since is not None:
+        where_clauses.append("a.created_at >= %s")
+        params.append(since)
+    if until is not None:
+        where_clauses.append("a.created_at <= %s")
+        params.append(until)
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+    with db.conn() as c, c.cursor() as cur:
+        # Count para pagination
+        cur.execute(f"SELECT COUNT(*)::int AS n FROM audit_log a {where_sql}",
+                    params)
+        total = int(cur.fetchone()["n"])
+
+        # Rows con JOIN a users
+        cur.execute(
+            f"""SELECT a.id, a.user_id, u.email AS user_email,
+                       u.full_name AS user_full_name,
+                       a.action, a.resource_type, a.resource_id,
+                       a.metadata, a.ip_address, a.created_at
+                  FROM audit_log a
+             LEFT JOIN users u ON u.id = a.user_id
+                {where_sql}
+              ORDER BY a.created_at DESC
+                 LIMIT %s OFFSET %s""",
+            params + [limit, offset],
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    return rows, total
+
+
+def list_distinct_actions() -> list[str]:
+    """Devuelve set de actions únicos en audit_log (para filter dropdown).
+
+    Ordenadas alfa. Útil para que la UI de filter no sea hardcoded.
+    """
+    if not db.is_enabled():
+        return []
+    with db.conn() as c, c.cursor() as cur:
+        cur.execute(
+            """SELECT DISTINCT action FROM audit_log
+                ORDER BY action""",
+        )
+        return [r["action"] for r in cur.fetchall()]
+
+
 # ─── Request integration helpers ─────────────────────────────────────────────
 
 

@@ -406,6 +406,8 @@
     $("#analytics-view").classList.toggle("hidden", name !== "analytics");
     const usersView = $("#users-view");
     if (usersView) usersView.classList.toggle("hidden", name !== "users");
+    const auditView = $("#audit-view");
+    if (auditView) auditView.classList.toggle("hidden", name !== "audit");
     if (name === "contacts")   loadContacts();
     if (name === "stats")      loadStats();
     if (name === "games")      loadGames();
@@ -415,6 +417,7 @@
     if (name === "info")       loadInfoColumns();
     if (name === "analytics")  loadAnalytics();
     if (name === "users")      loadUsers();
+    if (name === "audit")      { loadAuditFilters().then(loadAudit); }
   }
 
   // ============================================================
@@ -2083,6 +2086,223 @@
       if (action === "resend") resendInvitation(id);
     });
   }
+
+  // ============================================================
+  //   v3.2.0 M4: Audit log viewer (super_admin)
+  // ============================================================
+  const AUDIT_PAGE_SIZE = 50;
+  let _auditState = {
+    action: "",
+    user_id: "",
+    since: "",
+    until: "",
+    offset: 0,
+    total: 0,
+  };
+
+  async function loadAuditFilters() {
+    // Populate action filter dropdown desde el endpoint /audit-log/actions
+    try {
+      const json = await api("GET", "/api/audit-log/actions");
+      const sel = $("#audit-filter-action");
+      // Mantener "Todas" + agregar dinámicas
+      sel.innerHTML = `<option value="">Todas</option>` +
+        (json.actions || []).map(a =>
+          `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`
+        ).join("");
+    } catch (e) { /* silent */ }
+
+    // Populate user filter dropdown desde la list que ya cargamos en Users tab
+    try {
+      let users = _allUsers;
+      if (!users || !users.length) {
+        const j = await api("GET", "/api/users");
+        users = j.users || [];
+      }
+      const sel = $("#audit-filter-user");
+      sel.innerHTML = `<option value="">Todos</option>` +
+        users.map(u =>
+          `<option value="${u.id}">${escapeHtml(u.email)}</option>`
+        ).join("");
+    } catch (e) { /* silent */ }
+  }
+
+  async function loadAudit() {
+    const tbody = $("#audit-tbody");
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Cargando…</td></tr>`;
+
+    const params = new URLSearchParams();
+    if (_auditState.action) params.set("action", _auditState.action);
+    if (_auditState.user_id) params.set("user_id", _auditState.user_id);
+    if (_auditState.since) params.set("since", _auditState.since);
+    if (_auditState.until) {
+      // until → end of day
+      params.set("until", _auditState.until + "T23:59:59");
+    }
+    params.set("limit", AUDIT_PAGE_SIZE);
+    params.set("offset", _auditState.offset);
+
+    try {
+      const json = await api("GET", `/api/audit-log?${params}`);
+      _auditState.total = json.total || 0;
+      $("#audit-count").textContent =
+        `${_auditState.total} ${_auditState.total === 1 ? "evento" : "eventos"}`;
+      renderAuditRows(json.entries || []);
+      renderAuditPagination();
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">Error: ${escapeHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  function actionBadge(action) {
+    const colorMap = {
+      "login.success":   "text-emerald-300 bg-emerald-500/10",
+      "login.failed":    "text-red-300 bg-red-500/10",
+      "logout":          "text-gray-300 bg-gray-500/10",
+      "bootstrap":       "text-purple-300 bg-purple-500/10",
+      "user.invite":     "text-cyan-300 bg-cyan-500/10",
+      "user.update":     "text-blue-300 bg-blue-500/10",
+      "user.disable":    "text-red-300 bg-red-500/10",
+      "user.resend_invitation": "text-amber-300 bg-amber-500/10",
+      "invitation.accept":      "text-emerald-300 bg-emerald-500/10",
+      "password.forgot_request":"text-amber-300 bg-amber-500/10",
+      "password.reset":         "text-cyan-300 bg-cyan-500/10",
+      "audit_log.cleanup":      "text-gray-300 bg-gray-500/10",
+    };
+    const cls = colorMap[action] || "text-gray-300 bg-gray-500/10";
+    return `<span class="tag ${cls}">${escapeHtml(action)}</span>`;
+  }
+
+  function renderAuditRows(entries) {
+    const tbody = $("#audit-tbody");
+    if (!entries.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No hay eventos con esos filtros.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = entries.map(e => {
+      const userLabel = e.user_email ?
+        `${escapeHtml(e.user_full_name || e.user_email)}<br><span class="text-[10px] text-gray-500">${escapeHtml(e.user_email)}</span>` :
+        `<span class="text-gray-500">—</span>`;
+      const resource = e.resource_type ?
+        `${escapeHtml(e.resource_type)}${e.resource_id ? ' #' + escapeHtml(e.resource_id) : ''}` :
+        '—';
+      return `
+        <tr class="hover:bg-white/5">
+          <td class="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">${fmtDate(e.created_at)}</td>
+          <td class="px-4 py-3 text-xs">${userLabel}</td>
+          <td class="px-4 py-3">${actionBadge(e.action)}</td>
+          <td class="px-4 py-3 text-xs text-gray-400">${resource}</td>
+          <td class="px-4 py-3 text-xs text-gray-500 font-mono">${e.ip_address ? escapeHtml(e.ip_address) : '—'}</td>
+          <td class="px-4 py-3 text-right">
+            ${e.metadata ? `
+              <button data-audit-id="${e.id}"
+                      class="audit-detail px-2 py-1 text-xs text-brand-400 hover:bg-brand-500/10 rounded">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            ` : '<span class="text-gray-600 text-xs">—</span>'}
+          </td>
+        </tr>
+      `;
+    }).join("");
+    // Cache entries para el modal de detalle
+    _auditEntriesCache = {};
+    entries.forEach(e => { _auditEntriesCache[e.id] = e; });
+  }
+
+  let _auditEntriesCache = {};
+
+  function renderAuditPagination() {
+    const offset = _auditState.offset;
+    const total = _auditState.total;
+    const end = Math.min(offset + AUDIT_PAGE_SIZE, total);
+    $("#audit-pagination-info").textContent = total === 0 ?
+      "Sin resultados" :
+      `${offset + 1}–${end} de ${total}`;
+    $("#audit-prev").disabled = offset <= 0;
+    $("#audit-next").disabled = end >= total;
+  }
+
+  function openAuditDetail(id) {
+    const entry = _auditEntriesCache[id];
+    if (!entry) return;
+    const body = $("#audit-modal-body");
+    body.innerHTML = `
+      <div class="grid grid-cols-3 gap-2 text-xs">
+        <div class="text-gray-400 uppercase">ID</div>
+        <div class="col-span-2 font-mono">${entry.id}</div>
+        <div class="text-gray-400 uppercase">Fecha</div>
+        <div class="col-span-2">${fmtDate(entry.created_at)}</div>
+        <div class="text-gray-400 uppercase">Usuario</div>
+        <div class="col-span-2">${entry.user_email ? escapeHtml(entry.user_email) : '<span class="text-gray-500">— (sistema o user borrado)</span>'}</div>
+        <div class="text-gray-400 uppercase">Acción</div>
+        <div class="col-span-2">${actionBadge(entry.action)}</div>
+        <div class="text-gray-400 uppercase">Recurso</div>
+        <div class="col-span-2">${entry.resource_type ? escapeHtml(entry.resource_type) : '—'}${entry.resource_id ? ' #' + escapeHtml(entry.resource_id) : ''}</div>
+        <div class="text-gray-400 uppercase">IP</div>
+        <div class="col-span-2 font-mono">${entry.ip_address ? escapeHtml(entry.ip_address) : '—'}</div>
+      </div>
+      <div>
+        <div class="text-xs text-gray-400 uppercase mb-1">Metadata</div>
+        <pre class="bg-dark-900 border border-white/10 rounded-lg p-3 text-[11px] font-mono text-gray-300 overflow-x-auto">${entry.metadata ? escapeHtml(JSON.stringify(entry.metadata, null, 2)) : '(vacío)'}</pre>
+      </div>
+    `;
+    openModal("#audit-modal");
+  }
+
+  async function runAuditCleanup() {
+    if (!confirm("¿Purgar entries del audit log más viejos que 90 días? Esta acción no se puede deshacer.")) return;
+    try {
+      const json = await api("POST", "/api/admin/audit-cleanup", { retention_days: 90 });
+      alert(`Se borraron ${json.deleted_count} entries.`);
+      loadAudit();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  }
+
+  // Listeners audit log
+  if ($("#audit-refresh")) {
+    $("#audit-refresh").addEventListener("click", () => {
+      _auditState.offset = 0;
+      loadAudit();
+    });
+    $("#audit-cleanup-btn").addEventListener("click", runAuditCleanup);
+    $("#audit-filter-action").addEventListener("change", (e) => {
+      _auditState.action = e.target.value;
+      _auditState.offset = 0;
+      loadAudit();
+    });
+    $("#audit-filter-user").addEventListener("change", (e) => {
+      _auditState.user_id = e.target.value;
+      _auditState.offset = 0;
+      loadAudit();
+    });
+    $("#audit-filter-since").addEventListener("change", (e) => {
+      _auditState.since = e.target.value;
+      _auditState.offset = 0;
+      loadAudit();
+    });
+    $("#audit-filter-until").addEventListener("change", (e) => {
+      _auditState.until = e.target.value;
+      _auditState.offset = 0;
+      loadAudit();
+    });
+    $("#audit-prev").addEventListener("click", () => {
+      _auditState.offset = Math.max(0, _auditState.offset - AUDIT_PAGE_SIZE);
+      loadAudit();
+    });
+    $("#audit-next").addEventListener("click", () => {
+      _auditState.offset += AUDIT_PAGE_SIZE;
+      loadAudit();
+    });
+    $("#audit-tbody").addEventListener("click", (e) => {
+      const btn = e.target.closest("button.audit-detail");
+      if (btn) openAuditDetail(parseInt(btn.dataset.auditId, 10));
+    });
+  }
+
+  // Wire audit en selectView (esto ya lo hicimos antes, pero falta el case)
+  // Ver más abajo en selectView() la línea que llama loadAudit().
 
   // ---------- Boot (v3.2.0-rc3) ----------
   // Flujo simple:
