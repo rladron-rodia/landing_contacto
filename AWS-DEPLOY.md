@@ -32,11 +32,11 @@ Stack en AWS prod (account `325907670798`, region `us-east-1`). Migración desde
                                          │                            │ via instance role
                                          ▼                            │
                               ┌────────────────────────┐              │
-                              │   Resend API           │  ◄───────────┤
-                              │   (verified domain:    │              │
-                              │    monoulabs.ai)       │              │
-                              │   ⚠ transitorio →      │              │
-                              │   migrar a SES (v3.1)  │              │
+                              │   AWS SES              │  ◄───────────┤
+                              │   monoulabs.ai (DKIM)  │              │
+                              │   send.monoulabs.ai    │              │
+                              │   (custom MAIL FROM)   │              │
+                              │   boto3 + IAM role     │              │
                               └────────────────────────┘              │
                                                                       │
                                        ┌──────────────────────────────┘
@@ -391,11 +391,9 @@ Si algo se rompe, ver [`docs/DISASTER-RECOVERY.md`](docs/DISASTER-RECOVERY.md). 
 
 ### Próximas versiones
 
-- **v3.1.0 — Email Resend → AWS SES** (próxima): completar la promesa "100% AWS-native".
-  El email actual va por **Resend HTTP API** (transitorio). Migrar a `boto3.client('ses')`
-  con dominio `monoulabs.ai` verificado en SES (Route 53 ya tiene MX/SPF de SES en
-  `send.monoulabs.ai`, falta agregar DKIM del dominio principal y request prod access
-  para sacar del sandbox).
+- ✅ **v3.1.0 — Email Resend → AWS SES** (completado 2026-05-10): stack 100%
+  AWS-native. `boto3.client('ses')` con IAM instance role. DKIM verificado en
+  monoulabs.ai, custom MAIL FROM en send.monoulabs.ai. Sin secrets externos.
 - **v3.2.0 — Sistema multi-usuario** con roles, permisos e invitaciones por email.
   Replace ADMIN_TOKEN single-token por users + sessions.
 - **v3.3.0 (Fase 8) — Monitoring/alerting**: CloudWatch alarms (5xx rate, ALB latency,

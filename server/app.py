@@ -177,28 +177,82 @@ class EmailValidationError(EmailError):
 
 
 # --------------------------------------------------------------------------
-# Envío vía Resend
+# Envío de email vía AWS SES (boto3 + IAM instance role)
+#
+# Stack 100% AWS-native: las credenciales las toma boto3 automáticamente del
+# instance metadata (IAM role del EC2). Necesita IAM policy `ses:SendEmail`
+# sobre el identity ARN del dominio.
+#
+# Setup en SES (una vez):
+#   - Verificar dominio monoulabs.ai con DKIM (3 CNAMEs en Route 53)
+#   - Configurar custom MAIL FROM domain `send.monoulabs.ai` (MX + SPF en R53)
+#   - Account fuera del sandbox (production access)
+#
+# Migración previa: este código reemplazó la integración con Resend HTTP API
+# en v3.1.0 (ver CHANGELOG.md).
 # --------------------------------------------------------------------------
 
-RESEND_ENDPOINT = "https://api.resend.com/emails"
 
-
-def send_email(payload: dict) -> dict:
-    """Envía el correo a través de Resend.
-
-    Devuelve el JSON de la respuesta (incluye `id` del mensaje en Resend).
-    Lanza EmailAuthError / EmailValidationError / EmailError según el caso.
-    """
-    api_key = os.environ.get("RESEND_API_KEY", "").strip()
-    if not api_key:
-        raise EmailError("RESEND_API_KEY no está configurada")
-
-    mail_from = os.getenv("MAIL_FROM",
-                          "Monou Labs <onboarding@resend.dev>").strip()
+def _email_routing() -> tuple:
+    """Devuelve (mail_from, mail_to_list). Lanza si MAIL_TO está vacío."""
+    mail_from = os.getenv("MAIL_FROM", "Monou Labs <noreply@monoulabs.ai>").strip()
     mail_to_raw = os.getenv("MAIL_TO", "")
     mail_to = [t.strip() for t in mail_to_raw.split(",") if t.strip()]
     if not mail_to:
         raise EmailError("MAIL_TO no está configurada")
+    return mail_from, mail_to
+
+
+def _send_via_ses(mail_from, mail_to, subject, body_text, body_html,
+                  reply_to=None):
+    """Envia via AWS SES usando boto3 + IAM instance role."""
+    try:
+        import boto3
+        from botocore.exceptions import ClientError, BotoCoreError
+    except ImportError:
+        raise EmailError("boto3 no esta disponible para SES")
+
+    region = os.getenv("AWS_DEFAULT_REGION",
+                       os.getenv("AWS_REGION", "us-east-1"))
+    ses = boto3.client("ses", region_name=region)
+
+    kwargs = {
+        "Source": mail_from,
+        "Destination": {"ToAddresses": mail_to},
+        "Message": {
+            "Subject": {"Data": subject, "Charset": "UTF-8"},
+            "Body": {
+                "Text": {"Data": body_text, "Charset": "UTF-8"},
+                "Html": {"Data": body_html, "Charset": "UTF-8"},
+            },
+        },
+    }
+    if reply_to:
+        kwargs["ReplyToAddresses"] = [reply_to]
+
+    try:
+        response = ses.send_email(**kwargs)
+        return {"id": response["MessageId"], "provider": "ses"}
+    except ClientError as e:
+        code = e.response["Error"].get("Code", "Unknown")
+        msg = e.response["Error"].get("Message", str(e))
+        if code == "MessageRejected":
+            raise EmailValidationError(f"SES rechazo: {code}: {msg}")
+        if code in ("AccessDenied", "SignatureDoesNotMatch",
+                    "InvalidClientTokenId", "ExpiredToken"):
+            raise EmailAuthError(f"SES auth fallida: {code}: {msg}")
+        raise EmailError(f"SES error: {code}: {msg}")
+    except BotoCoreError as e:
+        raise EmailError(f"SES boto error: {e}")
+
+
+def send_email(payload: dict) -> dict:
+    """Envia email del contact form via AWS SES.
+
+    Devuelve dict con 'id' del MessageId de SES y 'provider': 'ses'.
+    Lanza EmailAuthError / EmailValidationError / EmailError según el caso.
+    """
+    mail_from, mail_to = _email_routing()
 
     nombre   = (payload.get("nombre")   or "").strip()
     email    = (payload.get("email")    or "").strip()
@@ -242,50 +296,12 @@ def send_email(payload: dict) -> dict:
   </body>
 </html>"""
 
-    body = {
-        "from": mail_from,
-        "to": mail_to,
-        "subject": subject,
-        "text": body_text,
-        "html": body_html,
-    }
     # Sanitiza reply_to: sólo si tiene forma de email y no contiene CRLF.
-    # Defensa secundaria contra header injection (Resend ya escapa JSON, pero
-    # mejor no enviarles basura).
     safe_reply = re.sub(r"[\r\n]+", "", email)
-    if safe_reply and EMAIL_RE.match(safe_reply):
-        body["reply_to"] = safe_reply
+    reply_to = safe_reply if (safe_reply and EMAIL_RE.match(safe_reply)) else None
 
-    req = urllib.request.Request(
-        RESEND_ENDPOINT,
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "monou-landing-backend/1.0",
-        },
-        method="POST",
-    )
-
-    with force_ipv4():
-        try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-                try:
-                    return json.loads(raw) if raw else {}
-                except json.JSONDecodeError:
-                    return {"raw": raw}
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")
-            if e.code in (401, 403):
-                raise EmailAuthError(
-                    f"Resend rechazó la API key (HTTP {e.code}): {err_body}")
-            if e.code == 422:
-                raise EmailValidationError(
-                    f"Resend rechazó el correo (HTTP 422): {err_body}")
-            raise EmailError(f"Resend HTTP {e.code}: {err_body}")
-        except urllib.error.URLError as e:
-            raise EmailError(f"Error de red llamando a Resend: {e.reason}")
+    return _send_via_ses(mail_from, mail_to, subject, body_text, body_html,
+                         reply_to=reply_to)
 
 
 # --------------------------------------------------------------------------
@@ -373,7 +389,7 @@ def health():
         "ok": True,
         "service": "monou-contact",
         "db": db.is_enabled(),
-        "email_provider": "resend",
+        "email_provider": "ses",
     }), 200
 
 
@@ -482,51 +498,10 @@ def _validate_recovery_id(token: str) -> tuple[bool, str]:
 
 
 def _send_simple_email(subject: str, body_text: str, body_html: str) -> dict:
-    """Envía un correo non-contact-form vía Resend. Reutiliza config de send_email."""
-    api_key = os.environ.get("RESEND_API_KEY", "").strip()
-    if not api_key:
-        raise EmailError("RESEND_API_KEY no está configurada")
-
-    mail_from = os.getenv("MAIL_FROM",
-                          "Monou Labs <onboarding@resend.dev>").strip()
-    mail_to_raw = os.getenv("MAIL_TO", "")
-    mail_to = [t.strip() for t in mail_to_raw.split(",") if t.strip()]
-    if not mail_to:
-        raise EmailError("MAIL_TO no está configurada")
-
-    body = {
-        "from": mail_from,
-        "to": mail_to,
-        "subject": subject,
-        "text": body_text,
-        "html": body_html,
-    }
-    req = urllib.request.Request(
-        RESEND_ENDPOINT,
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "monou-landing-backend/1.0",
-        },
-        method="POST",
-    )
-    with force_ipv4():
-        try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-                return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")
-            if e.code in (401, 403):
-                raise EmailAuthError(
-                    f"Resend rechazó la API key (HTTP {e.code}): {err_body}")
-            if e.code == 422:
-                raise EmailValidationError(
-                    f"Resend rechazó el correo (HTTP 422): {err_body}")
-            raise EmailError(f"Resend HTTP {e.code}: {err_body}")
-        except urllib.error.URLError as e:
-            raise EmailError(f"Resend network error: {e}")
+    """Helper para emails non-contact-form (token recovery, alertas internas)."""
+    mail_from, mail_to = _email_routing()
+    return _send_via_ses(mail_from, mail_to, subject, body_text, body_html,
+                         reply_to=None)
 
 
 @app.route("/api/admin/request-token-recovery", methods=["POST"])

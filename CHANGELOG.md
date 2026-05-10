@@ -7,6 +7,57 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ---
 
+## [3.1.0] — 2026-05-10
+
+### 🚀 Email migration: Resend → AWS SES (cierra promesa 100% AWS-native)
+
+Toda la integración de email ahora va por AWS SES con `boto3` y autenticación
+vía IAM instance role. Resend queda completamente fuera del stack productivo.
+
+### Added
+
+- **`_send_via_ses()` helper** en `server/app.py` que usa `boto3.client('ses')`.
+  Sin secrets externos: credenciales toman del IAM role del EC2 via instance
+  metadata (IMDSv2). Mismas exceptions semantics (EmailAuthError /
+  EmailValidationError / EmailError) que el código previo de Resend.
+- **IAM policy `SendEmailViaSES`** en `monou-backend-ec2-role`: permite
+  `ses:SendEmail` y `ses:SendRawEmail` scope-limited a los identity ARNs
+  de `monoulabs.ai` y `send.monoulabs.ai`.
+- **DKIM completo en Route 53** (3 CNAMEs `_domainkey.monoulabs.ai`)
+  validados por SES (`DkimAttributes.Status: SUCCESS`).
+- **Custom MAIL FROM domain** `send.monoulabs.ai` configurado en SES
+  (los registros MX/SPF ya existían en Route 53 desde antes).
+
+### Changed
+
+- **`server/app.py`**: `send_email()` y `_send_simple_email()` llaman directo
+  a `_send_via_ses()`. Stack simplificado de un solo proveedor (no más
+  dispatcher pattern con feature flag).
+- **`deploy/start-monou.sh`**: ya no exporta `EMAIL_PROVIDER` — código solo
+  soporta SES.
+
+### Removed
+
+- **`_send_via_resend()` function** y constante `RESEND_ENDPOINT` de `app.py`.
+- **`_dispatch_send()` function**: dispatcher transitorio, ya no necesario.
+- **`RESEND_API_KEY` field** de `monou/prod/app` Secrets Manager (rotated out).
+- **`/monou/prod/EMAIL_PROVIDER` parameter** de Parameter Store (transitorio).
+- **`resend._domainkey.monoulabs.ai` TXT record** de Route 53 (DNS de Resend).
+
+### Validation
+
+- E2E confirmado: form submission → SES → email entregado a `MAIL_TO` con
+  `mailed-by: send.monoulabs.ai` (SPF align), `signed-by: monoulabs.ai`
+  (DKIM válido), TLS encryption en transit.
+
+### Costs
+
+- Resend (era): plan free hasta 3K/mes, después $20/mo
+- AWS SES (ahora): $0.10 por 1000 emails outbound = **~$0.01/mes** para
+  el volumen actual del contact form (<100 emails/mes).
+
+---
+
 ## [3.0.0] — 2026-05-09
 
 ### 🚀 Major: Migración Render → AWS
