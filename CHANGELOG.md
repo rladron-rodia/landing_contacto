@@ -53,6 +53,16 @@ pipeline de optimización completo (resize + WebP + PNG fallback).
   (download → resize → WebP+PNG → upload), con flag `--dry-run` para
   inspección visual antes de tocar S3. Documenta el pipeline para
   futuras migraciones.
+- **`deploy-frontend.sh`** — sync de HTML/CSS/JS/fonts a S3 +
+  invalidación CloudFront, con Cache-Control automático: long-cache
+  (1 año immutable) para `assets/`, short-cache (5 min) para
+  `index.html` + meta + `admin/`. Resuelve el warning PageSpeed
+  "Usar tiempos de vida de caché eficientes" (~219 KiB) que aparecía
+  porque CloudFront/browsers asumían 1h cuando no había Cache-Control
+  en el origin.
+- **`scripts/fix-cache-headers.sh`** — one-off para actualizar
+  Cache-Control en objetos S3 existentes (vía `--metadata-directive
+  REPLACE`), sin re-uploadear contenido. Idempotente.
 
 ### Migration steps applied
 
