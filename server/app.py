@@ -47,6 +47,7 @@ from dotenv import load_dotenv
 import db  # módulo de persistencia (degrada a no-op si DATABASE_URL no está)
 import image_optimizer  # procesamiento Pillow (lazy: solo carga si /upload-image se invoca)
 import s3_uploader      # boto3 wrapper (lazy: solo carga si /upload-image se invoca)
+import auth             # v3.2.0: sistema multi-usuario (sessions, perms, audit)
 
 
 # --------------------------------------------------------------------------
@@ -395,20 +396,43 @@ def health():
 
 
 def _is_admin(req) -> bool:
-    """Valida el header Authorization Bearer contra ADMIN_TOKEN.
+    """Valida que el request tenga credenciales de admin.
 
-    Usa hmac.compare_digest para evitar timing attacks (la comparación de
-    strings con `==` revela cuántos chars coinciden por la duración de la
-    operación, lo que permite recuperar el token byte a byte).
+    v3.2.0+: acepta DOS paths simultáneamente:
+      1. Cookie de sesión (sistema multi-usuario nuevo). Cualquier user
+         con role super_admin/admin pasa. Editor también pasa pero la
+         autorización fina la dan los decoradores @require_permission.
+         Como los endpoints legacy /api/admin/* usan _is_admin como gate
+         binario, treat editor como admin solo si tiene CUALQUIER permiso
+         (sino, no debería siquiera ver el admin panel).
+      2. Bearer ADMIN_TOKEN (legacy). Sigue activo durante la transición.
+         Solo válido si bootstrap_done=false; después se desactiva auto.
+
+    Path orden: cookie primero (más usuarios), luego token (escape hatch).
+
+    Sigue usando hmac.compare_digest para path token (timing-safe).
     """
+    # Path 1: Cookie session (v3.2.0)
+    user = auth.get_current_user(req)
+    if user and user.get("status") == "active":
+        # Super_admin y admin tienen acceso completo a /api/admin/*
+        if user.get("role") in ("super_admin", "admin"):
+            return True
+        # Editor: lo dejamos pasar el gate binario; los endpoints específicos
+        # van a chequear su permission con @require_permission.
+        if user.get("role") == "editor":
+            return True
+
+    # Path 2: Bearer ADMIN_TOKEN (legacy, solo válido pre-bootstrap)
+    if auth.is_bootstrap_done():
+        # Después del bootstrap, ADMIN_TOKEN se desactiva. Solo cookie.
+        return False
     token = os.getenv("ADMIN_TOKEN", "")
     if not token:
         return False
-    auth = req.headers.get("Authorization", "")
+    authz = req.headers.get("Authorization", "")
     expected = f"Bearer {token}"
-    # compare_digest necesita strings/bytes de igual tipo y maneja cualquier
-    # longitud sin filtrar info por timing.
-    return hmac.compare_digest(auth, expected)
+    return hmac.compare_digest(authz, expected)
 
 
 def _unauthorized():
@@ -587,6 +611,622 @@ def exchange_recovery():
         return jsonify({"ok": False, "error": "admin_not_configured"}), 500
 
     return jsonify({"ok": True, "admin_token": token}), 200
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# v3.2.0 — Sistema multi-usuario (sessions, login, bootstrap)
+# ──────────────────────────────────────────────────────────────────────────
+#
+# Coexistencia con ADMIN_TOKEN:
+#   - Mientras `system_settings.bootstrap_done = false`, ADMIN_TOKEN sigue
+#     funcionando en todos los endpoints /api/admin/* legacy (vía _is_admin).
+#   - Después del bootstrap, los endpoints existentes aceptan COOKIE session
+#     OR Bearer ADMIN_TOKEN (refactor en v3.2.0-rc4).
+#   - En v3.2.0 final, ADMIN_TOKEN se elimina del Secret y solo queda Cookie.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def _user_to_public(user: dict) -> dict:
+    """Convierte row de users a JSON seguro (sin password_hash)."""
+    if not user:
+        return {}
+    return {
+        "id": user.get("id"),
+        "email": user.get("email"),
+        "full_name": user.get("full_name"),
+        "role": user.get("role"),
+        "status": user.get("status"),
+        "created_via": user.get("created_via"),
+        "created_at": user["created_at"].isoformat() if user.get("created_at") else None,
+        "last_login_at": user["last_login_at"].isoformat() if user.get("last_login_at") else None,
+    }
+
+
+@app.route("/api/auth/login", methods=["POST"])
+@limiter.limit("10 per minute; 30 per hour")
+def auth_login():
+    """Login con email + password. Setea cookie HttpOnly al éxito.
+
+    Rate-limit conservador para mitigar credential stuffing.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"ok": False, "error": "missing_credentials"}), 400
+
+    user = auth.get_user_by_email(email)
+    # Constant-time-ish: si user no existe, igual hacemos el verify dummy
+    # para no dar away "user existe" vs "password incorrecta" por timing.
+    dummy_hash = "$2b$12$" + "a" * 53  # bcrypt-shaped pero inválido
+    valid = auth.verify_password(password, user["password_hash"] if user else dummy_hash)
+
+    ip = auth._client_ip(request)
+
+    if not user or not valid or user.get("status") != "active":
+        auth.audit("login.failed", user_id=user["id"] if user else None,
+                   metadata={"email": email, "reason":
+                       "no_user" if not user else
+                       "wrong_password" if not valid else
+                       "user_disabled"},
+                   ip=ip)
+        return jsonify({"ok": False, "error": "invalid_credentials"}), 401
+
+    # OK — crear sesión
+    sid = auth.create_session(
+        user["id"],
+        ip=ip,
+        user_agent=request.headers.get("User-Agent", "")[:500],
+    )
+    auth.update_last_login(user["id"])
+    auth.audit("login.success", user_id=user["id"], ip=ip)
+
+    response = jsonify({
+        "ok": True,
+        "user": _user_to_public(user),
+        "permissions": auth.get_user_permissions(user["id"]),
+    })
+    auth.set_session_cookie(response, sid)
+    return response, 200
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def auth_logout():
+    """Invalida la sesión actual y borra el cookie."""
+    sid = auth.get_session_id_from_request(request)
+    if sid:
+        # Captura user_id antes de revocar para audit
+        user = auth.validate_session(sid)
+        auth.revoke_session(sid)
+        if user:
+            auth.audit("logout", user_id=user["id"], ip=auth._client_ip(request))
+
+    response = jsonify({"ok": True})
+    auth.clear_session_cookie(response)
+    return response, 200
+
+
+@app.route("/api/auth/me", methods=["GET"])
+@auth.require_session
+def auth_me():
+    """Devuelve user actual + permisos. Frontend lo usa para gating de UI."""
+    user = auth.get_current_user(request)
+    return jsonify({
+        "ok": True,
+        "user": _user_to_public(user),
+        "permissions": auth.get_user_permissions(user["id"]),
+    }), 200
+
+
+@app.route("/api/auth/bootstrap", methods=["POST"])
+@limiter.limit("3 per hour")
+def auth_bootstrap():
+    """Primera setup: crea super_admin con email+password usando ADMIN_TOKEN.
+
+    Solo permitido si:
+      - bootstrap_done = false en system_settings
+      - Authorization Bearer ADMIN_TOKEN válido
+      - email + password + full_name provistos
+      - password ≥ 8 chars
+
+    Después del bootstrap, este endpoint deja de aceptar requests (404
+    para no leak). El primer login subsiguiente usa /api/auth/login.
+    """
+    if auth.is_bootstrap_done():
+        # No leakear si bootstrap ya pasó (404 idéntico a endpoint inexistente)
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    if not _is_admin(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+    full_name = (data.get("full_name") or "").strip()
+
+    if not email or not password or not full_name:
+        return jsonify({"ok": False, "error": "missing_fields",
+                        "required": ["email", "password", "full_name"]}), 400
+
+    # Validación email básica (ya tenemos EMAIL_RE más abajo en app.py)
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return jsonify({"ok": False, "error": "invalid_email"}), 400
+
+    if len(password) < 8:
+        return jsonify({"ok": False, "error": "password_too_short",
+                        "min_length": 8}), 400
+
+    # Si ya hay un user con ese email (raro), conflicto
+    if auth.get_user_by_email(email):
+        return jsonify({"ok": False, "error": "email_already_used"}), 409
+
+    try:
+        password_hash = auth.hash_password(password)
+        user_id = auth.create_user(
+            email=email,
+            password_hash=password_hash,
+            full_name=full_name,
+            role="super_admin",
+            status="active",
+            invited_by=None,
+            created_via="bootstrap",
+        )
+        auth.mark_bootstrap_done()
+    except Exception as e:
+        app.logger.exception("Bootstrap failed")
+        return jsonify({"ok": False, "error": "bootstrap_failed",
+                        "detail": str(e)}), 500
+
+    user = auth.get_user_by_id(user_id)
+
+    # Auto-login: crear sesión
+    sid = auth.create_session(
+        user_id,
+        ip=auth._client_ip(request),
+        user_agent=request.headers.get("User-Agent", "")[:500],
+    )
+    auth.update_last_login(user_id)
+    auth.audit("bootstrap", user_id=user_id, ip=auth._client_ip(request),
+               metadata={"email": email})
+
+    response = jsonify({
+        "ok": True,
+        "user": _user_to_public(user),
+        "permissions": auth.get_user_permissions(user_id),
+    })
+    auth.set_session_cookie(response, sid)
+    return response, 201
+
+
+@app.route("/api/auth/bootstrap-status", methods=["GET"])
+def auth_bootstrap_status():
+    """Frontend usa esto para decidir mostrar 'login' vs 'setup' wizard.
+
+    Público (no auth) — solo expone un boolean, no leakea credentials.
+    """
+    return jsonify({
+        "ok": True,
+        "bootstrap_done": auth.is_bootstrap_done(),
+    }), 200
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# v3.2.0 — Users CRUD + invitations
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def _invitation_url(token: str) -> str:
+    """URL absoluta del accept page. Frontend hostea /admin/invitation/."""
+    return f"https://monoulabs.ai/admin/invitation/?id={token}"
+
+
+def _send_invitation_email(invitation: dict, inviter: dict) -> None:
+    """Manda email con magic link de invitation usando SES.
+
+    invitation: dict con {id, email, full_name, role, expires_at}
+    inviter: dict del user que invita (para personalización)
+    """
+    url = _invitation_url(invitation["id"])
+    role_label = {
+        "super_admin": "super administrador",
+        "admin": "administrador",
+        "editor": "editor",
+    }.get(invitation["role"], invitation["role"])
+    inviter_name = inviter.get("full_name") or inviter.get("email") or "Un administrador"
+
+    subject = f"[Monou Labs] Te invitaron al panel de administración"
+    body_text = (
+        f"Hola{(' ' + invitation['full_name']) if invitation.get('full_name') else ''},\n\n"
+        f"{inviter_name} te invitó a colaborar en el panel de administración "
+        f"de Monou Labs como {role_label}.\n\n"
+        f"Para activar tu cuenta y crear tu contraseña, hace click acá:\n"
+        f"{url}\n\n"
+        f"Este link expira en 7 días.\n\n"
+        "Si no esperabas esta invitación, podés ignorar este email.\n"
+    )
+    body_html = f"""\
+<html>
+  <body style="font-family: Inter, Arial, sans-serif; color:#0B0E14;">
+    <h2 style="color:#0d9488;">Te invitaron a Monou Labs admin</h2>
+    <p>Hola{(' <strong>' + html.escape(invitation['full_name']) + '</strong>') if invitation.get('full_name') else ''},</p>
+    <p><strong>{html.escape(inviter_name)}</strong> te invitó a colaborar en el
+       panel de administración de Monou Labs como <strong>{role_label}</strong>.</p>
+    <p style="margin: 24px 0;">
+      <a href="{url}"
+         style="background:#14b8a6;color:#fff;padding:12px 24px;
+                text-decoration:none;border-radius:8px;display:inline-block;
+                font-weight:600;">
+        Activar mi cuenta
+      </a>
+    </p>
+    <p style="font-size:12px;color:#666;">
+      Este link expira en 7 días. Si no esperabas esta invitación, podés
+      ignorar este email.
+    </p>
+    <p style="font-size:12px;color:#666;">
+      Si el botón no funciona, copia y pega esta URL:<br>
+      <code style="word-break:break-all;">{url}</code>
+    </p>
+  </body>
+</html>"""
+
+    _send_simple_email(subject, body_text, body_html)
+
+
+@app.route("/api/users", methods=["GET"])
+@auth.require_role("super_admin", "admin")
+def users_list():
+    """Lista todos los users. Admin ve todos; super_admin también."""
+    users = auth.list_users(include_disabled=True)
+    return jsonify({
+        "ok": True,
+        "count": len(users),
+        "users": [_user_to_public(u) for u in users],
+    }), 200
+
+
+@app.route("/api/users/<int:user_id>", methods=["GET"])
+@auth.require_role("super_admin", "admin")
+def users_get(user_id: int):
+    """Detalle de un user. Incluye permissions si es editor."""
+    user = auth.get_user_by_id(user_id)
+    if not user:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({
+        "ok": True,
+        "user": _user_to_public(user),
+        "permissions": auth.get_user_permissions(user_id),
+    }), 200
+
+
+@app.route("/api/users/<int:user_id>", methods=["PATCH"])
+@auth.require_role("super_admin", "admin")
+def users_update(user_id: int):
+    """Actualiza un user (full_name, role, status, permissions).
+
+    Guard rails:
+    - admin solo puede tocar editors (no admins ni super_admins)
+    - super_admin no puede demote ni disable a sí mismo si es el último
+    - Cambio de role re-aplica permissions según role nuevo
+    """
+    actor = auth.get_current_user(request)
+    target = auth.get_user_by_id(user_id)
+    if not target:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    allowed, reason = auth.can_actor_manage(actor, target)
+    if not allowed:
+        return jsonify({"ok": False, "error": "forbidden",
+                        "reason": reason}), 403
+
+    data = request.get_json(silent=True) or {}
+    new_role = data.get("role")
+    new_status = data.get("status")
+    new_full_name = data.get("full_name")
+    new_permissions = data.get("permissions")
+
+    # Guard: si actor=admin, NO puede promote a editor → admin/super_admin
+    if actor["role"] == "admin" and new_role and new_role != "editor":
+        return jsonify({"ok": False, "error": "forbidden",
+                        "reason": "admin_cannot_create_admins"}), 403
+
+    # Guard: super_admin auto-actions
+    if actor["id"] == target["id"]:
+        if new_role and new_role != actor["role"]:
+            return jsonify({"ok": False, "error": "forbidden",
+                            "reason": "cannot_change_own_role"}), 403
+        if new_status == "disabled":
+            return jsonify({"ok": False, "error": "forbidden",
+                            "reason": "cannot_disable_self"}), 403
+
+    # Guard: no demote/disable último super_admin
+    if (target["role"] == "super_admin" and target["status"] == "active" and
+        ((new_role and new_role != "super_admin") or
+         (new_status == "disabled"))):
+        if auth.count_active_super_admins() <= 1:
+            return jsonify({"ok": False, "error": "forbidden",
+                            "reason": "cannot_modify_last_super_admin"}), 403
+
+    try:
+        updated = auth.update_user(
+            user_id,
+            full_name=new_full_name,
+            role=new_role,
+            status=new_status,
+        )
+    except ValueError as e:
+        return jsonify({"ok": False, "error": "invalid_input",
+                        "detail": str(e)}), 400
+
+    # Si role cambió o se mandaron permissions explícitas, sync
+    if new_permissions is not None:
+        # Solo aplica perms si role nuevo (o actual) es editor
+        effective_role = updated["role"]
+        if effective_role == "editor":
+            auth.set_user_permissions(user_id, new_permissions)
+        else:
+            # super_admin/admin tienen perms por convención; limpiamos rows
+            with db.conn() as c, c.cursor() as cur:
+                cur.execute("DELETE FROM user_permissions WHERE user_id = %s",
+                            (user_id,))
+
+    auth.audit("user.update", user_id=actor["id"],
+               resource_type="user", resource_id=str(user_id),
+               metadata={"changes": {
+                   "role": new_role, "status": new_status,
+                   "full_name": new_full_name,
+                   "permissions_updated": new_permissions is not None,
+               }},
+               ip=auth._client_ip(request))
+
+    return jsonify({
+        "ok": True,
+        "user": _user_to_public(updated),
+        "permissions": auth.get_user_permissions(user_id),
+    }), 200
+
+
+@app.route("/api/users/<int:user_id>", methods=["DELETE"])
+@auth.require_role("super_admin", "admin")
+def users_disable(user_id: int):
+    """Soft delete: pone status='disabled'. Hard delete solo via SSM directo.
+
+    También revoca todas las sesiones del user (force logout inmediato).
+    """
+    actor = auth.get_current_user(request)
+    target = auth.get_user_by_id(user_id)
+    if not target:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    allowed, reason = auth.can_actor_manage(actor, target)
+    if not allowed:
+        return jsonify({"ok": False, "error": "forbidden",
+                        "reason": reason}), 403
+
+    if actor["id"] == target["id"]:
+        return jsonify({"ok": False, "error": "forbidden",
+                        "reason": "cannot_disable_self"}), 403
+
+    if (target["role"] == "super_admin" and target["status"] == "active"
+        and auth.count_active_super_admins() <= 1):
+        return jsonify({"ok": False, "error": "forbidden",
+                        "reason": "cannot_disable_last_super_admin"}), 403
+
+    auth.update_user(user_id, status="disabled")
+    revoked_count = auth.revoke_all_sessions(user_id)
+
+    auth.audit("user.disable", user_id=actor["id"],
+               resource_type="user", resource_id=str(user_id),
+               metadata={"sessions_revoked": revoked_count},
+               ip=auth._client_ip(request))
+
+    return jsonify({"ok": True, "sessions_revoked": revoked_count}), 200
+
+
+@app.route("/api/users/invite", methods=["POST"])
+@auth.require_role("super_admin", "admin")
+@limiter.limit("20 per hour")
+def users_invite():
+    """Crea invitation y manda email. Body:
+       { email, full_name?, role, permissions? }
+
+    Reglas:
+    - admin solo puede invitar role='editor'
+    - email debe ser único entre users active y entre invitations pending
+    - permissions snapshot solo aplica si role='editor'
+    """
+    actor = auth.get_current_user(request)
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    full_name = (data.get("full_name") or "").strip() or None
+    role = data.get("role") or ""
+    permissions = data.get("permissions")  # opcional
+
+    if not email or role not in auth.ROLES:
+        return jsonify({"ok": False, "error": "invalid_input",
+                        "required": ["email", "role"]}), 400
+
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return jsonify({"ok": False, "error": "invalid_email"}), 400
+
+    # Guard: admin solo invita editors
+    if actor["role"] == "admin" and role != "editor":
+        return jsonify({"ok": False, "error": "forbidden",
+                        "reason": "admin_can_only_invite_editors"}), 403
+
+    # Conflict: usuario ya existe activo
+    existing = auth.get_user_by_email(email)
+    if existing and existing["status"] == "active":
+        return jsonify({"ok": False, "error": "email_already_used"}), 409
+
+    # Si hay invitations pending, las revocamos para no acumular múltiples
+    pending = auth.list_pending_invitations_for_email(email)
+    for p in pending:
+        auth.revoke_invitation(p["id"])
+
+    # Crea invitation nueva
+    inv = auth.create_invitation(
+        email=email,
+        full_name=full_name,
+        role=role,
+        permissions=permissions if role == "editor" else None,
+        invited_by=actor["id"],
+    )
+
+    # Manda email (best-effort: si falla, dejamos invitation creada y devolvemos error suave)
+    email_sent = False
+    email_error = None
+    try:
+        _send_invitation_email(inv, actor)
+        email_sent = True
+    except Exception as e:
+        app.logger.exception("Invitation email failed")
+        email_error = str(e)
+
+    auth.audit("user.invite", user_id=actor["id"],
+               resource_type="invitation", resource_id=inv["id"],
+               metadata={
+                   "email": email, "role": role,
+                   "email_sent": email_sent,
+                   "revoked_pending": len(pending),
+               },
+               ip=auth._client_ip(request))
+
+    response = {
+        "ok": True,
+        "invitation": {
+            "id": inv["id"],
+            "email": inv["email"],
+            "role": inv["role"],
+            "expires_at": inv["expires_at"].isoformat()
+                if inv.get("expires_at") else None,
+        },
+        "email_sent": email_sent,
+    }
+    if not email_sent:
+        response["email_error"] = email_error or "send_failed"
+    return jsonify(response), 201
+
+
+@app.route("/api/users/<int:user_id>/resend-invitation", methods=["POST"])
+@auth.require_role("super_admin", "admin")
+@limiter.limit("10 per hour")
+def users_resend_invitation(user_id: int):
+    """Re-genera invitation para un user pending (status='pending').
+
+    Solo aplica a users que aún NO han completado el accept (status pending
+    es el estado canónico, pero como el flow actual crea user solo en accept,
+    en realidad chequeamos invitations pending para el email del user).
+    """
+    actor = auth.get_current_user(request)
+    target = auth.get_user_by_id(user_id)
+    if not target:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    if target["status"] != "pending":
+        return jsonify({"ok": False, "error": "user_not_pending",
+                        "status": target["status"]}), 400
+
+    allowed, reason = auth.can_actor_manage(actor, target)
+    if not allowed:
+        return jsonify({"ok": False, "error": "forbidden",
+                        "reason": reason}), 403
+
+    # Revoca pending existentes
+    pending = auth.list_pending_invitations_for_email(target["email"])
+    for p in pending:
+        auth.revoke_invitation(p["id"])
+
+    # Crea invitation nueva (mismo role/perms del user pending)
+    perms = auth.get_user_permissions(user_id) if target["role"] == "editor" else None
+    inv = auth.create_invitation(
+        email=target["email"],
+        full_name=target["full_name"],
+        role=target["role"],
+        permissions=perms,
+        invited_by=actor["id"],
+    )
+
+    email_sent = False
+    try:
+        _send_invitation_email(inv, actor)
+        email_sent = True
+    except Exception:
+        app.logger.exception("Resend invitation email failed")
+
+    auth.audit("user.resend_invitation", user_id=actor["id"],
+               resource_type="user", resource_id=str(user_id),
+               metadata={"email_sent": email_sent},
+               ip=auth._client_ip(request))
+
+    return jsonify({"ok": True, "email_sent": email_sent}), 200
+
+
+# ── Public endpoints (invitation accept page) ─────────────────────────────
+
+
+@app.route("/api/invitations/<token>", methods=["GET"])
+@limiter.limit("60 per hour")
+def invitations_get(token: str):
+    """Public — devuelve info pública de una invitation pending.
+
+    Usado por el accept page para mostrar "X te invitó como [role]". NO leakea
+    permissions (innecesario para la UI) ni invited_by_id.
+    """
+    inv = auth.get_invitation(token, include_expired=False)
+    if not inv:
+        return jsonify({"ok": False, "error": "invalid_or_expired"}), 404
+    return jsonify({
+        "ok": True,
+        "invitation": {
+            "email": inv["email"],
+            "full_name": inv.get("full_name"),
+            "role": inv["role"],
+            "expires_at": inv["expires_at"].isoformat() if inv.get("expires_at") else None,
+            "invited_by_email": inv.get("invited_by_email"),
+            "invited_by_name": inv.get("invited_by_name"),
+        },
+    }), 200
+
+
+@app.route("/api/invitations/<token>/accept", methods=["POST"])
+@limiter.limit("10 per hour; 30 per day")
+def invitations_accept(token: str):
+    """Public — acepta invitation: set password, crea user, auto-login.
+
+    Body: { password: str }
+    """
+    data = request.get_json(silent=True) or {}
+    password = data.get("password") or ""
+
+    user, sid, err = auth.accept_invitation(
+        token=token,
+        password=password,
+        ip=auth._client_ip(request),
+        user_agent=request.headers.get("User-Agent", "")[:500],
+    )
+
+    if err:
+        # Status code apropiado por error type
+        status = 400
+        if err in ("not_found", "expired", "revoked", "already_accepted"):
+            status = 404 if err == "not_found" else 410
+        elif err == "email_taken":
+            status = 409
+        return jsonify({"ok": False, "error": err}), status
+
+    auth.audit("invitation.accept", user_id=user["id"],
+               resource_type="invitation", resource_id=token,
+               ip=auth._client_ip(request))
+
+    response = jsonify({
+        "ok": True,
+        "user": _user_to_public(user),
+        "permissions": auth.get_user_permissions(user["id"]),
+    })
+    auth.set_session_cookie(response, sid)
+    return response, 200
 
 
 # ---------------------------------------------------------------------------

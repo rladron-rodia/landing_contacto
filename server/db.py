@@ -125,6 +125,111 @@ CREATE TABLE IF NOT EXISTS cta_tags (
     display_order   INT NOT NULL DEFAULT 0,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- v3.2.0: sistema multi-usuario con roles, permisos, invitaciones, sessions
+-- ═══════════════════════════════════════════════════════════════════════
+--
+-- Bootstrap flow:
+--   1. v3.2.0 deploy → tablas creadas, users vacío.
+--   2. Primer login con ADMIN_TOKEN dispara wizard /api/auth/bootstrap.
+--   3. Bootstrap crea super_admin con email+password, marca
+--      system_settings.bootstrap_done=true.
+--   4. ADMIN_TOKEN-mode se desactiva. Toda auth via cookie sessions.
+
+-- Settings globales (singleton, id=1).
+CREATE TABLE IF NOT EXISTS system_settings (
+    id                INT PRIMARY KEY DEFAULT 1,
+    bootstrap_done    BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT system_settings_singleton CHECK (id = 1)
+);
+
+-- users: cuentas registradas. password_hash NULL hasta accept invitation.
+CREATE TABLE IF NOT EXISTS users (
+    id                BIGSERIAL PRIMARY KEY,
+    email             TEXT NOT NULL,                  -- case-insensitive unique via index
+    password_hash     TEXT,                            -- bcrypt; NULL para invitations pendientes
+    full_name         TEXT,
+    role              TEXT NOT NULL CHECK (role IN ('super_admin','admin','editor')),
+    status            TEXT NOT NULL DEFAULT 'active'
+                          CHECK (status IN ('active','disabled','pending')),
+    invited_by        BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    created_via       TEXT,                            -- 'bootstrap' | 'invitation'
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_login_at     TIMESTAMPTZ
+);
+
+-- email único case-insensitive (no permitir Foo@x.com Y foo@x.com)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
+    ON users (LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_users_status
+    ON users (status) WHERE status = 'active';
+
+-- user_permissions: solo aplica a role='editor'.
+-- super_admin/admin tienen permisos completos por convención (no per-row).
+-- recurso ∈ {contacts, stats, games_f2p, games_publishers, site_links,
+--           delivery, info_columns, analytics, users}
+CREATE TABLE IF NOT EXISTS user_permissions (
+    user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    resource          TEXT NOT NULL,
+    can_read          BOOLEAN NOT NULL DEFAULT FALSE,
+    can_write         BOOLEAN NOT NULL DEFAULT FALSE,
+    can_delete        BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (user_id, resource)
+);
+
+-- user_sessions: DB-backed login state. Sliding TTL, revocable.
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id                TEXT PRIMARY KEY,                -- 32-byte hex (64 chars)
+    user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at        TIMESTAMPTZ NOT NULL,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ip_address        INET,
+    user_agent        TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user
+    ON user_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires
+    ON user_sessions (expires_at);
+
+-- user_invitations: magic-link tokens single-use, 7d expiry.
+CREATE TABLE IF NOT EXISTS user_invitations (
+    id                TEXT PRIMARY KEY,                -- 32-byte hex
+    email             TEXT NOT NULL,
+    full_name         TEXT,
+    role              TEXT NOT NULL CHECK (role IN ('super_admin','admin','editor')),
+    permissions       JSONB,                            -- snapshot para apply on accept
+    invited_by        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at        TIMESTAMPTZ NOT NULL,
+    accepted_at       TIMESTAMPTZ,
+    revoked_at        TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitations_email_pending
+    ON user_invitations (LOWER(email))
+    WHERE accepted_at IS NULL AND revoked_at IS NULL;
+
+-- audit_log: trail forense de actions críticas. Cleanup nocturno > 90d.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id                BIGSERIAL PRIMARY KEY,
+    user_id           BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    action            TEXT NOT NULL,                    -- 'login','logout','user.create',etc.
+    resource_type     TEXT,                             -- 'user','game','contact',etc.
+    resource_id       TEXT,
+    metadata          JSONB,                            -- payload context
+    ip_address        INET,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_user_time
+    ON audit_log (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_action_time
+    ON audit_log (action, created_at DESC);
 """
 
 # Migraciones idempotentes que se ejecutan al boot. ALTER TABLE IF NOT EXISTS
@@ -498,8 +603,15 @@ def init_schema() -> None:
                 CTA_TAGS_SEED,
             )
             cta_inserted = cur.rowcount
-            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d, delivery: %d, info: %d, analytics_init: %d, cta_tags: %d",
-                     stats_inserted, games_inserted, links_inserted, delivery_inserted, info_inserted, analytics_initialized, cta_inserted)
+            # v3.2.0 — Singleton de system_settings (bootstrap_done=false al crear)
+            cur.execute(
+                """INSERT INTO system_settings (id, bootstrap_done)
+                   VALUES (1, FALSE)
+                   ON CONFLICT (id) DO NOTHING""",
+            )
+            sys_initialized = cur.rowcount
+            log.info("[db] schema+migraciones OK — stats: %d, games: %d, links: %d, delivery: %d, info: %d, analytics_init: %d, cta_tags: %d, sys_init: %d",
+                     stats_inserted, games_inserted, links_inserted, delivery_inserted, info_inserted, analytics_initialized, cta_inserted, sys_initialized)
     except Exception:
         log.exception("[db] error inicializando schema")
 

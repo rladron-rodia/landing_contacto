@@ -7,6 +7,91 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ---
 
+## [3.2.0-rc1] — 2026-05-10
+
+### Backend foundations — multi-user system (M1 + M2)
+
+Reemplaza el `ADMIN_TOKEN` único por un sistema completo de cuentas con
+roles, permisos granulares y invitaciones por email. Backend listo;
+frontend (M3) pending en rc2.
+
+### Added
+
+**DB schema** (6 tablas nuevas en `server/db.py`, idempotentes):
+
+- `system_settings` — singleton con `bootstrap_done` flag
+- `users` — cuentas con email, password_hash (bcrypt), role, status
+- `user_permissions` — granular per-resource (read/write/delete)
+- `user_sessions` — DB-backed sessions con sliding TTL 30d
+- `user_invitations` — magic-link tokens single-use, 7d expiry
+- `audit_log` — trail forense con retention 90d
+
+**Módulo `server/auth.py`** (nuevo):
+
+- bcrypt password hashing (cost 12)
+- Sessions con sliding TTL, cookie HttpOnly+Secure+SameSite=Lax
+- Permission checks per recurso/acción (3 roles fijos × 9 recursos × 3 acciones)
+- Decoradores `@require_session`, `@require_role`, `@require_permission`
+- Users CRUD con guard rails:
+  - No demote/disable último super_admin
+  - admin solo gestiona editors (no puede tocar admins ni super_admins)
+  - No auto-disable / no auto-democión
+- Invitation flow: create → email → public accept → auto-login
+- Audit log helper
+
+**Endpoints REST** (13 nuevos en `server/app.py`):
+
+- `POST /api/auth/login` — email+password → cookie
+- `POST /api/auth/logout` — invalida session
+- `GET /api/auth/me` — user actual + permisos
+- `POST /api/auth/bootstrap` — primer setup con ADMIN_TOKEN
+- `GET /api/auth/bootstrap-status` — público, frontend decide UI
+- `GET /api/users` — list (super_admin/admin)
+- `GET /api/users/:id` — detalle
+- `PATCH /api/users/:id` — update role/status/permissions
+- `DELETE /api/users/:id` — soft delete (status=disabled) + revoke sessions
+- `POST /api/users/invite` — manda invitation email
+- `POST /api/users/:id/resend-invitation` — re-genera token
+- `GET /api/invitations/:token` — público, info de invitation
+- `POST /api/invitations/:token/accept` — set password + auto-login
+
+**Email template SES**: invitation con magic link a
+`https://monoulabs.ai/admin/invitation/?id=<token>`.
+
+### Changed
+
+- `_is_admin(req)` ahora acepta DOS paths simultáneamente:
+  1. Cookie session (sistema nuevo)
+  2. Bearer ADMIN_TOKEN (legacy, solo válido pre-bootstrap)
+
+  Después del bootstrap, ADMIN_TOKEN se desactiva automáticamente.
+
+- `requirements.txt`: agregado `bcrypt==4.2.0`.
+
+### Roles y permisos (referencia)
+
+- **super_admin** — todo, incluido gestión de admins/super_admins
+- **admin** — todas las pestañas excepto write/delete sobre admins.
+  Puede invitar y gestionar SOLO editors.
+- **editor** — acceso granular per-pestaña según `user_permissions`
+
+**8 recursos** (= pestañas): contacts, stats, games_f2p, games_publishers,
+site_links, delivery, info_columns, analytics + 1 meta: users.
+
+### Deploy notes
+
+Este rc es **backend-only**. Frontend admin viejo sigue funcionando con
+ADMIN_TOKEN. La nueva API multi-user está disponible pero sin UI hasta rc2.
+
+### Pending (rc2 / rc3 / rc4)
+
+- **M3**: Login UI (email+password), Bootstrap wizard, Pestaña Usuarios,
+  página pública `/admin/invitation/`
+- **M4**: Per-tab UI gating según permissions, Audit log viewer
+- **M5**: Cleanup ADMIN_TOKEN, docs, tag v3.2.0 final
+
+---
+
 ## [3.1.2] — 2026-05-10
 
 ### Patch — Image optimization & legacy bucket retirement
