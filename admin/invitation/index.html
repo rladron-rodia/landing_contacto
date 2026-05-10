@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aceptar invitación · Monou.gg</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans: ['Inter', 'sans-serif'] },
+        colors: {
+          brand: { 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e' },
+          dark:  { 900: '#0B0E14', 800: '#151A23', 700: '#1f2937' },
+        }
+      }}
+    }
+  </script>
+  <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-dark-900 text-gray-100 min-h-screen flex items-center justify-center p-6">
+
+  <!-- Estado: cargando info de invitación -->
+  <div id="loading-state" class="text-center text-gray-400">
+    <i class="fa-solid fa-spinner fa-spin text-2xl text-brand-400 mb-4"></i>
+    <p>Verificando invitación…</p>
+  </div>
+
+  <!-- Estado: invitación inválida / expirada -->
+  <div id="error-state" class="hidden w-full max-w-md bg-dark-800 border border-red-500/30 rounded-2xl p-8 text-center">
+    <i class="fa-solid fa-circle-xmark text-red-400 text-3xl mb-3"></i>
+    <h1 class="text-xl font-semibold mb-2">Invitación inválida o expirada</h1>
+    <p id="error-detail" class="text-sm text-gray-400 mb-6">
+      El enlace puede haber sido usado, revocado o expirado (válido 7 días).
+    </p>
+    <p class="text-xs text-gray-500">
+      Pedí una nueva invitación al administrador que te envió esta.
+    </p>
+  </div>
+
+  <!-- Estado: form para set password -->
+  <div id="accept-state" class="hidden w-full max-w-md bg-dark-800 border border-brand-500/30 rounded-2xl p-8">
+    <div class="flex items-center gap-3 mb-3">
+      <i class="fa-solid fa-shield-halved text-brand-400 text-2xl"></i>
+      <h1 class="text-2xl font-bold">Activar mi cuenta</h1>
+    </div>
+    <p class="text-sm text-gray-400 mb-2">
+      <span id="invited-by">Alguien</span> te invitó al panel de
+      Monou.gg como <strong id="invited-role" class="text-brand-300">editor</strong>.
+    </p>
+    <p class="text-xs text-gray-500 mb-6" id="invitation-email-hint"></p>
+
+    <form id="accept-form" class="space-y-4">
+      <div>
+        <label class="block text-gray-400 text-xs uppercase mb-1">Nombre</label>
+        <input id="invitation-fullname" type="text" disabled
+               class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-gray-500"
+               placeholder="(no especificado)">
+      </div>
+      <div>
+        <label class="block text-gray-400 text-xs uppercase mb-1">Email</label>
+        <input id="invitation-email" type="email" disabled
+               class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-gray-500">
+      </div>
+      <div>
+        <label class="block text-gray-400 text-xs uppercase mb-1">
+          Crear contraseña <span class="text-gray-600">(mín. 8 caracteres)</span>
+        </label>
+        <input id="accept-password" type="password" autocomplete="new-password" required minlength="8"
+               class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+      </div>
+      <div>
+        <label class="block text-gray-400 text-xs uppercase mb-1">Confirmar contraseña</label>
+        <input id="accept-password-confirm" type="password" autocomplete="new-password" required minlength="8"
+               class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+      </div>
+      <button type="submit"
+              class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg transition-colors">
+        Activar cuenta y entrar
+      </button>
+      <p id="accept-error" class="hidden text-xs text-red-400 text-center"></p>
+      <p id="accept-info" class="hidden text-xs text-brand-400 text-center"></p>
+    </form>
+
+    <p class="text-[11px] text-gray-600 text-center mt-6">
+      Esta invitación expira el <span id="invitation-expires">—</span>.
+    </p>
+  </div>
+
+  <script>
+    // API base: igual que admin/app.js — detecta automáticamente
+    const API_BASE = (function () {
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1") return "http://localhost:5000";
+      if (host === "monoulabs.ai" || host.endsWith(".monoulabs.ai")) return "https://api.monoulabs.ai";
+      return "";
+    })();
+
+    function $(sel) { return document.querySelector(sel); }
+    function escapeHtml(s) {
+      if (s == null) return "";
+      return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+
+    function show(id) {
+      ["loading-state", "error-state", "accept-state"].forEach(s =>
+        $("#" + s).classList.toggle("hidden", s !== id));
+    }
+
+    function showError(detail) {
+      if (detail) $("#error-detail").textContent = detail;
+      show("error-state");
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("id");
+
+    if (!token) {
+      showError("Link sin token. Pedí una nueva invitación.");
+    } else {
+      fetchInvitation();
+    }
+
+    async function fetchInvitation() {
+      try {
+        const res = await fetch(`${API_BASE}/api/invitations/${encodeURIComponent(token)}`);
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          showError(j.error === "invalid_or_expired"
+            ? "El link no es válido, ya fue usado, o expiró (7 días)."
+            : "No se pudo verificar la invitación.");
+          return;
+        }
+        const json = await res.json();
+        const inv = json.invitation;
+
+        const inviter = inv.invited_by_name || inv.invited_by_email || "Un administrador";
+        $("#invited-by").textContent = inviter;
+        $("#invited-role").textContent = (inv.role || "").replace("_", " ");
+        $("#invitation-email").value = inv.email;
+        $("#invitation-fullname").value = inv.full_name || "";
+        $("#invitation-email-hint").innerHTML =
+          `Esta invitación es para <strong class="text-gray-400">${escapeHtml(inv.email)}</strong>. ` +
+          `Si no es tu email, ignorá este link.`;
+        if (inv.expires_at) {
+          $("#invitation-expires").textContent =
+            new Date(inv.expires_at).toLocaleDateString("es-MX",
+              { day: "numeric", month: "long", year: "numeric" });
+        }
+        show("accept-state");
+      } catch (e) {
+        showError("Error de red. Intentá de nuevo.");
+      }
+    }
+
+    $("#accept-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errEl = $("#accept-error");
+      const infoEl = $("#accept-info");
+      errEl.classList.add("hidden");
+      infoEl.classList.add("hidden");
+
+      const pw = $("#accept-password").value;
+      const pwConfirm = $("#accept-password-confirm").value;
+      if (pw !== pwConfirm) {
+        errEl.textContent = "Las contraseñas no coinciden.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+      if (pw.length < 8) {
+        errEl.textContent = "Mínimo 8 caracteres.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+
+      infoEl.textContent = "Activando cuenta…";
+      infoEl.classList.remove("hidden");
+
+      try {
+        const res = await fetch(`${API_BASE}/api/invitations/${encodeURIComponent(token)}/accept`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: pw }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.ok) {
+          infoEl.classList.add("hidden");
+          const msg = {
+            "expired": "Esta invitación expiró.",
+            "revoked": "Esta invitación fue revocada.",
+            "already_accepted": "Esta invitación ya fue usada.",
+            "email_taken": "Ese email ya está registrado.",
+            "password_too_short": "Contraseña muy corta.",
+            "password_invalid": "Contraseña inválida.",
+            "not_found": "Invitación no encontrada.",
+          }[json.error] || "No se pudo activar la cuenta.";
+          errEl.textContent = msg;
+          errEl.classList.remove("hidden");
+          return;
+        }
+        // OK: cookie ya está seteada por el backend (auto-login).
+        // Limpia URL y redirige al admin.
+        window.history.replaceState({}, "", "/admin/");
+        infoEl.textContent = "¡Listo! Redirigiendo al admin…";
+        setTimeout(() => { window.location.href = "/admin/"; }, 800);
+      } catch (e) {
+        infoEl.classList.add("hidden");
+        errEl.textContent = "Error de red. Intentá de nuevo.";
+        errEl.classList.remove("hidden");
+      }
+    });
+  </script>
+</body>
+</html>

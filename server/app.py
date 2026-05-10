@@ -107,7 +107,12 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
 _origins = [o.strip() for o in ALLOWED_ORIGIN.split(",")] if ALLOWED_ORIGIN != "*" else "*"
-CORS(app, resources={r"/api/*": {"origins": _origins}}, supports_credentials=False)
+# v3.2.0: supports_credentials=True permite cookies cross-origin (admin en
+# monoulabs.ai → API en api.monoulabs.ai). Requiere origin allowlist explícito
+# (no wildcard). Si ALLOWED_ORIGIN sigue siendo "*", credentials no llegan
+# y el login con cookie va a fallar — el operador debe setear ALLOWED_ORIGIN
+# a "https://monoulabs.ai" (al menos) en Parameter Store.
+CORS(app, resources={r"/api/*": {"origins": _origins}}, supports_credentials=True)
 
 # Rate limiting (defensa contra abuso del formulario / fuerza bruta del admin).
 # Storage in-memory: las cuentas son por proceso de gunicorn. Con `-w 2` el

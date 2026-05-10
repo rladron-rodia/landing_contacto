@@ -29,7 +29,7 @@
 </head>
 <body class="bg-dark-900 text-gray-100 min-h-screen">
 
-  <!-- ───── Login ───── -->
+  <!-- ───── Login (email + password) ───── -->
   <div id="login-view" class="hidden min-h-screen items-center justify-center p-6">
     <div class="w-full max-w-md bg-dark-800 border border-white/10 rounded-2xl p-8">
       <div class="flex items-center gap-3 mb-6">
@@ -37,13 +37,20 @@
         <h1 class="text-2xl font-bold">Monou.gg · Admin</h1>
       </div>
       <p class="text-sm text-gray-400 mb-6">
-        Pega tu <code class="bg-dark-900 px-1 py-0.5 rounded text-brand-400">ADMIN_TOKEN</code>
-        para entrar.
+        Inicia sesión con tu email y contraseña.
       </p>
       <form id="login-form" class="space-y-4">
-        <input id="token-input" type="password" autocomplete="off" required
-               placeholder="Bearer token..."
-               class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Email</label>
+          <input id="login-email" type="email" autocomplete="email" required
+                 placeholder="tu@email.com"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Contraseña</label>
+          <input id="login-password" type="password" autocomplete="current-password" required
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        </div>
         <button type="submit"
                 class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg transition-colors">
           Entrar
@@ -53,9 +60,59 @@
         <div class="text-center pt-2">
           <button type="button" id="forgot-token-btn"
                   class="text-xs text-gray-400 hover:text-brand-400 underline transition-colors">
-            ¿Olvidé mi token?
+            ¿Olvidé mi contraseña?
           </button>
         </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── Bootstrap wizard (primer setup, solo si bootstrap_done=false) ───── -->
+  <div id="bootstrap-view" class="hidden min-h-screen items-center justify-center p-6">
+    <div class="w-full max-w-md bg-dark-800 border border-brand-500/30 rounded-2xl p-8">
+      <div class="flex items-center gap-3 mb-3">
+        <i class="fa-solid fa-rocket text-brand-400 text-2xl"></i>
+        <h1 class="text-2xl font-bold">Configurar tu cuenta</h1>
+      </div>
+      <p class="text-sm text-gray-400 mb-2">
+        Primer setup del admin. Vas a crear tu cuenta de <strong>super administrador</strong>.
+      </p>
+      <p class="text-xs text-gray-500 mb-6">
+        Usá tu <code class="bg-dark-900 px-1 py-0.5 rounded text-brand-400">ADMIN_TOKEN</code>
+        para autorizar este setup. Después de crearla, el token se desactiva.
+      </p>
+      <form id="bootstrap-form" class="space-y-4">
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">ADMIN_TOKEN (autorización)</label>
+          <input id="bootstrap-token" type="password" autocomplete="off" required
+                 placeholder="Bearer token actual..."
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm font-mono focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Tu nombre completo</label>
+          <input id="bootstrap-fullname" type="text" required
+                 placeholder="Rodrigo Ladrón de Guevara"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Tu email</label>
+          <input id="bootstrap-email" type="email" autocomplete="email" required
+                 placeholder="tu@email.com"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">
+            Contraseña <span class="text-gray-600">(mín. 8 caracteres)</span>
+          </label>
+          <input id="bootstrap-password" type="password" autocomplete="new-password" required minlength="8"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        </div>
+        <button type="submit"
+                class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg transition-colors">
+          Crear cuenta y entrar
+        </button>
+        <p id="bootstrap-error" class="hidden text-xs text-red-400 text-center"></p>
+        <p id="bootstrap-info" class="hidden text-xs text-brand-400 text-center"></p>
       </form>
     </div>
   </div>
@@ -118,8 +175,24 @@
           <span class="nav-label flex-1 truncate">Analytics &amp; GTM</span>
           <i class="fa-solid fa-pen-to-square nav-edit-btn text-gray-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="Renombrar pestaña"></i>
         </button>
+        <!-- v3.2.0: Usuarios — solo visible para super_admin/admin (gating en JS via data-requires-role) -->
+        <button data-view="users" data-requires-role="super_admin,admin"
+                class="nav-btn nav-users group w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-white/5 hidden">
+          <i class="fa-solid fa-users w-4 flex-shrink-0"></i>
+          <span class="nav-label flex-1 truncate">Usuarios</span>
+        </button>
       </nav>
-      <div class="p-3 border-t border-white/10">
+      <!-- v3.2.0: user info en footer del sidebar -->
+      <div class="p-3 border-t border-white/10 space-y-2">
+        <div id="current-user-card" class="px-3 py-2 rounded-lg bg-dark-900 hidden">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-circle-user text-brand-400"></i>
+            <div class="flex-1 min-w-0">
+              <div id="current-user-name" class="text-xs font-semibold truncate">—</div>
+              <div id="current-user-role" class="text-[10px] uppercase tracking-wide text-gray-500 truncate">—</div>
+            </div>
+          </div>
+        </div>
         <button id="logout-btn"
                 class="w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm text-gray-400 hover:bg-white/5 hover:text-white">
           <i class="fa-solid fa-right-from-bracket w-4"></i> Salir
@@ -605,6 +678,52 @@
                 </table>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── v3.2.0: Usuarios view (super_admin/admin) ─── -->
+      <section id="users-view" class="hidden">
+        <header class="sticky top-0 z-10 bg-dark-800/80 backdrop-blur border-b border-white/10">
+          <div class="px-6 py-4 flex items-center gap-4">
+            <i class="fa-solid fa-users text-brand-400"></i>
+            <h1 class="text-lg font-semibold">Usuarios</h1>
+            <span id="users-count" class="text-xs bg-dark-900 px-2 py-1 rounded-full text-gray-400"></span>
+            <div class="ml-auto flex items-center gap-3">
+              <button id="users-refresh"
+                      class="px-3 py-1.5 bg-dark-900 hover:bg-white/5 rounded-lg text-sm text-gray-300 flex items-center gap-2">
+                <i class="fa-solid fa-arrows-rotate"></i> Refrescar
+              </button>
+              <button id="users-invite-btn"
+                      class="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 rounded-lg text-sm text-white font-medium flex items-center gap-2">
+                <i class="fa-solid fa-user-plus"></i> Invitar usuario
+              </button>
+            </div>
+          </div>
+        </header>
+        <div class="p-6">
+          <p class="text-xs text-gray-500 mb-4">
+            Gestiona los usuarios con acceso al panel.
+            <strong class="text-gray-400">super_admin</strong> ve y gestiona a todos.
+            <strong class="text-gray-400">admin</strong> sólo gestiona <em>editors</em>.
+          </p>
+          <div class="bg-dark-800 border border-white/10 rounded-xl overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-dark-900 text-xs uppercase text-gray-400">
+                <tr>
+                  <th class="px-4 py-3 text-left">Email</th>
+                  <th class="px-4 py-3 text-left">Nombre</th>
+                  <th class="px-4 py-3 text-left">Rol</th>
+                  <th class="px-4 py-3 text-left">Status</th>
+                  <th class="px-4 py-3 text-left">Último login</th>
+                  <th class="px-4 py-3 text-left">Invitado por</th>
+                  <th class="px-4 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody" class="divide-y divide-white/5">
+                <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Cargando…</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -1121,6 +1240,117 @@
           </button>
           <button type="button" class="modal-close px-4 py-2.5 border border-white/10 rounded-lg hover:bg-white/5">
             Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───── v3.2.0: Modal Usuario (invite + edit unified) ───── -->
+  <div id="user-modal" class="hidden fixed inset-0 z-20 bg-black/70 flex items-center justify-center p-6">
+    <div class="bg-dark-800 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-white/10 flex items-center gap-3">
+        <i class="fa-solid fa-user-plus text-brand-400"></i>
+        <h2 id="user-modal-title" class="text-lg font-semibold">Invitar usuario</h2>
+        <button class="modal-close ml-auto text-gray-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+      <form id="user-form" class="p-6 space-y-5">
+        <input type="hidden" id="user-id">
+        <input type="hidden" id="user-mode" value="invite">
+
+        <!-- Banner cuando se está editando un user existente (no editable: email) -->
+        <div id="user-edit-banner" class="hidden p-3 bg-brand-500/10 border border-brand-500/30 rounded-lg text-xs text-brand-300">
+          <i class="fa-solid fa-circle-info"></i>
+          Editando usuario existente. El email no se puede cambiar.
+        </div>
+
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Email</label>
+          <input type="email" id="user-email" required
+                 placeholder="usuario@email.com"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Nombre completo</label>
+          <input type="text" id="user-fullname"
+                 placeholder="Nombre Apellido (opcional)"
+                 class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-gray-400 text-xs uppercase mb-1">Rol</label>
+          <select id="user-role"
+                  class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-brand-500">
+            <option value="editor">Editor — acceso granular configurable</option>
+            <option value="admin" data-role-restriction="super_admin">Admin — todo excepto gestión de admins</option>
+            <option value="super_admin" data-role-restriction="super_admin">Super admin — acceso total</option>
+          </select>
+          <p class="text-[11px] text-gray-500 mt-1" id="user-role-hint">
+            Editor: configura permisos por pestaña abajo.
+            Admin/Super: tienen acceso completo (no aplican permisos granulares).
+          </p>
+        </div>
+
+        <!-- Permissions matrix: solo visible cuando role=editor -->
+        <div id="user-permissions-section">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-gray-400 text-xs uppercase">Permisos por pestaña</label>
+            <div class="flex gap-2">
+              <button type="button" id="perms-grant-all"
+                      class="text-[11px] text-brand-400 hover:text-brand-300 underline">
+                Marcar todo
+              </button>
+              <button type="button" id="perms-clear-all"
+                      class="text-[11px] text-gray-400 hover:text-gray-300 underline">
+                Desmarcar todo
+              </button>
+            </div>
+          </div>
+          <div class="bg-dark-900 border border-white/10 rounded-lg overflow-hidden">
+            <table class="w-full text-xs">
+              <thead class="bg-dark-700 text-gray-400 uppercase">
+                <tr>
+                  <th class="px-3 py-2 text-left">Pestaña</th>
+                  <th class="px-3 py-2 text-center">Read</th>
+                  <th class="px-3 py-2 text-center">Write</th>
+                  <th class="px-3 py-2 text-center">Delete</th>
+                </tr>
+              </thead>
+              <tbody id="user-perms-tbody" class="divide-y divide-white/5">
+                <!-- filled by JS — un row per resource -->
+              </tbody>
+            </table>
+          </div>
+          <p class="text-[11px] text-gray-500 mt-2">
+            <i class="fa-solid fa-circle-info"></i>
+            Read = ver, Write = crear/editar, Delete = borrar registros.
+            Marcar Write o Delete sin Read no es útil (no podrá listar para editar/borrar).
+          </p>
+        </div>
+
+        <!-- Status (solo en mode=edit) -->
+        <div id="user-status-section" class="hidden">
+          <label class="block text-gray-400 text-xs uppercase mb-1">Status</label>
+          <select id="user-status"
+                  class="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-brand-500">
+            <option value="active">Activo</option>
+            <option value="disabled">Deshabilitado</option>
+            <option value="pending" disabled>Pendiente (auto)</option>
+          </select>
+        </div>
+
+        <p id="user-form-error" class="hidden text-xs text-red-400"></p>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="modal-close px-4 py-2.5 border border-white/10 rounded-lg hover:bg-white/5">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2.5 bg-brand-500 hover:bg-brand-600 rounded-lg text-white font-medium">
+            <span id="user-form-submit-label">Enviar invitación</span>
           </button>
         </div>
       </form>

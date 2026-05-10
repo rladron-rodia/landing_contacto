@@ -37,15 +37,29 @@
   let currentView   = "contacts";
 
   // ---------- Token ----------
-  // Vive solo en memoria del proceso de la pestaña. NO se persiste en
-  // localStorage ni sessionStorage. Trade-off: hay que pegar el token cada
-  // vez que se abre/recarga la pestaña. A cambio, defensa contra XSS futuras:
-  // ningún script malicioso puede leer el token desde storage del browser.
-  // (v2.4.x — security audit recomendación H2)
-  let _adminToken = "";
-  const getToken   = () => _adminToken;
-  const setToken   = (t) => { _adminToken = (t || "").trim(); };
-  const clearToken = () => { _adminToken = ""; };
+  // v3.2.0: sistema multi-usuario.
+  // Auth ahora vive en cookies HttpOnly (no accesibles desde JS por diseño).
+  // El JS solo conoce el user actual + permissions, populated por GET /api/auth/me
+  // al boot. Cuando la cookie expira, /api/auth/me devuelve 401 → showLogin().
+  let _currentUser = null;
+  let _currentPermissions = {};
+
+  const getCurrentUser = () => _currentUser;
+  const getRole = () => (_currentUser && _currentUser.role) || null;
+  const isAuthenticated = () => !!_currentUser;
+  function hasPermission(resource, action) {
+    if (!_currentUser) return false;
+    const role = _currentUser.role;
+    if (role === "super_admin" || role === "admin") return true;
+    const p = _currentPermissions[resource] || {};
+    return !!p[`can_${action}`];
+  }
+  function isRole(...roles) {
+    return roles.includes(getRole());
+  }
+
+  // Legacy helpers (compat con código que aún las llama mientras migramos):
+  const clearToken = () => { _currentUser = null; _currentPermissions = {}; };
 
   // ---------- Nav labels personalizables (persisten en localStorage) ----------
   const NAV_LABELS_KEY = "monou_nav_labels";
@@ -155,20 +169,24 @@
     }[c]));
   }
 
+  // v3.2.0: auth via cookie HttpOnly. credentials:'include' manda la cookie
+  // en cross-origin (admin en monoulabs.ai → API en api.monoulabs.ai).
+  // Backend setea Access-Control-Allow-Credentials:true (CORS supports_credentials).
   async function api(method, path, body) {
     const opts = {
       method,
-      headers: { "Authorization": `Bearer ${getToken()}` },
+      credentials: "include",  // ← envía cookie monou_session cross-origin
+      headers: {},
     };
     if (body !== undefined) {
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
     }
     const res = await fetch(`${API_BASE}${path}`, opts);
-    if (res.status === 401) { clearToken(); throw new Error("Token inválido"); }
+    if (res.status === 401) { clearToken(); showLogin(); throw new Error("Sesión expirada"); }
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json.ok === false) {
-      throw new Error(json.error || `HTTP ${res.status}`);
+      throw new Error(json.error || json.reason || `HTTP ${res.status}`);
     }
     return json;
   }
@@ -179,10 +197,10 @@
   async function apiUpload(path, formData) {
     const res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${getToken()}` },
+      credentials: "include",
       body: formData,
     });
-    if (res.status === 401) { clearToken(); throw new Error("Token inválido"); }
+    if (res.status === 401) { clearToken(); showLogin(); throw new Error("Sesión expirada"); }
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json.ok === false) {
       throw new Error(json.error || `HTTP ${res.status}`);
@@ -295,6 +313,7 @@
   function showLogin(msg) {
     $("#login-view").classList.remove("hidden");
     $("#login-view").classList.add("flex");
+    $("#bootstrap-view").classList.add("hidden");
     $("#app-view").classList.add("hidden");
     if (msg) {
       $("#login-error").textContent = msg;
@@ -302,14 +321,85 @@
     } else {
       $("#login-error").classList.add("hidden");
     }
-    $("#token-input").focus();
+    const emailInp = $("#login-email");
+    if (emailInp) emailInp.focus();
+  }
+
+  function showBootstrap(msg) {
+    $("#bootstrap-view").classList.remove("hidden");
+    $("#bootstrap-view").classList.add("flex");
+    $("#login-view").classList.add("hidden");
+    $("#app-view").classList.add("hidden");
+    if (msg) {
+      $("#bootstrap-error").textContent = msg;
+      $("#bootstrap-error").classList.remove("hidden");
+    } else {
+      $("#bootstrap-error").classList.add("hidden");
+    }
   }
 
   function showApp() {
     $("#login-view").classList.add("hidden");
+    $("#bootstrap-view").classList.add("hidden");
     $("#app-view").classList.remove("hidden");
     $("#app-view").classList.add("flex");
-    selectView("contacts");
+
+    // v3.2.0: gating de la nav según role/permissions
+    applyNavGating();
+
+    // Render user info card en sidebar
+    renderCurrentUserCard();
+
+    // Default view: contacts si tiene read; sino la primera con read
+    const initial = pickInitialView();
+    selectView(initial);
+  }
+
+  function pickInitialView() {
+    const candidates = ["contacts", "stats", "games", "publishers",
+                        "links", "delivery", "info", "analytics"];
+    const map = {
+      contacts: "contacts", stats: "stats", games: "games_f2p",
+      publishers: "games_publishers", links: "site_links",
+      delivery: "delivery", info: "info_columns", analytics: "analytics",
+    };
+    for (const v of candidates) {
+      if (hasPermission(map[v], "read")) return v;
+    }
+    // Si es super_admin/admin, fallback users
+    if (isRole("super_admin", "admin")) return "users";
+    return "contacts";
+  }
+
+  function applyNavGating() {
+    // Map view → resource
+    const map = {
+      contacts: "contacts", stats: "stats", games: "games_f2p",
+      publishers: "games_publishers", links: "site_links",
+      delivery: "delivery", info: "info_columns", analytics: "analytics",
+      users: "users",
+    };
+    $$(".nav-btn").forEach(btn => {
+      const view = btn.dataset.view;
+      const requiresRole = (btn.dataset.requiresRole || "").split(",").filter(Boolean);
+      let visible;
+      if (requiresRole.length) {
+        visible = requiresRole.includes(getRole());
+      } else {
+        const resource = map[view] || view;
+        visible = hasPermission(resource, "read");
+      }
+      btn.classList.toggle("hidden", !visible);
+    });
+  }
+
+  function renderCurrentUserCard() {
+    const card = $("#current-user-card");
+    const u = getCurrentUser();
+    if (!u || !card) return;
+    card.classList.remove("hidden");
+    $("#current-user-name").textContent = u.full_name || u.email;
+    $("#current-user-role").textContent = u.role.replace("_", " ");
   }
 
   function selectView(name) {
@@ -325,6 +415,8 @@
     $("#delivery-view").classList.toggle("hidden", name !== "delivery");
     $("#info-view").classList.toggle("hidden", name !== "info");
     $("#analytics-view").classList.toggle("hidden", name !== "analytics");
+    const usersView = $("#users-view");
+    if (usersView) usersView.classList.toggle("hidden", name !== "users");
     if (name === "contacts")   loadContacts();
     if (name === "stats")      loadStats();
     if (name === "games")      loadGames();
@@ -333,6 +425,7 @@
     if (name === "delivery")   loadDelivery();
     if (name === "info")       loadInfoColumns();
     if (name === "analytics")  loadAnalytics();
+    if (name === "users")      loadUsers();
   }
 
   // ============================================================
@@ -562,12 +655,106 @@
   // ============================================================
   //   Listeners
   // ============================================================
-  $("#login-form").addEventListener("submit", (e) => {
+  // v3.2.0: login con email + password (POST /api/auth/login).
+  // El backend setea cookie HttpOnly. Frontend solo guarda user + permissions
+  // en memoria (rehidratables en cada reload via /api/auth/me).
+  $("#login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const t = $("#token-input").value.trim();
-    if (!t) return;
-    setToken(t);
-    showApp();
+    const errEl = $("#login-error");
+    const infoEl = $("#login-info");
+    errEl.classList.add("hidden");
+    infoEl.classList.add("hidden");
+
+    const email = $("#login-email").value.trim();
+    const password = $("#login-password").value;
+    if (!email || !password) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        errEl.textContent = "Demasiados intentos, espera unos minutos.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+      if (!res.ok || !json.ok) {
+        errEl.textContent = "Email o contraseña incorrectos.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+      _currentUser = json.user;
+      _currentPermissions = json.permissions || {};
+      $("#login-password").value = "";
+      showApp();
+    } catch (err) {
+      errEl.textContent = "Error de red. Intentá de nuevo.";
+      errEl.classList.remove("hidden");
+    }
+  });
+
+  // v3.2.0: bootstrap wizard — primer setup usando ADMIN_TOKEN
+  $("#bootstrap-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errEl = $("#bootstrap-error");
+    const infoEl = $("#bootstrap-info");
+    errEl.classList.add("hidden");
+    infoEl.classList.add("hidden");
+
+    const token = $("#bootstrap-token").value.trim();
+    const email = $("#bootstrap-email").value.trim();
+    const fullname = $("#bootstrap-fullname").value.trim();
+    const password = $("#bootstrap-password").value;
+
+    if (!token || !email || !fullname || !password) return;
+    if (password.length < 8) {
+      errEl.textContent = "La contraseña debe tener al menos 8 caracteres.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+
+    infoEl.textContent = "Creando cuenta…";
+    infoEl.classList.remove("hidden");
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/bootstrap`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email, full_name: fullname, password }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        infoEl.classList.add("hidden");
+        const msg = json.error === "email_already_used" ?
+            "Ese email ya está registrado." :
+          json.error === "password_too_short" ?
+            "Contraseña muy corta (mín 8)." :
+          json.error === "unauthorized" ?
+            "ADMIN_TOKEN inválido." :
+            "No se pudo crear la cuenta. Verificá los datos.";
+        errEl.textContent = msg;
+        errEl.classList.remove("hidden");
+        return;
+      }
+      _currentUser = json.user;
+      _currentPermissions = json.permissions || {};
+      // Limpiamos campos sensibles
+      $("#bootstrap-token").value = "";
+      $("#bootstrap-password").value = "";
+      showApp();
+    } catch (err) {
+      infoEl.classList.add("hidden");
+      errEl.textContent = "Error de red. Intentá de nuevo.";
+      errEl.classList.remove("hidden");
+    }
   });
 
   // ---------- Forgot token: request magic link ----------
@@ -623,7 +810,17 @@
   // Aplica labels guardados al cargar
   applySavedNavLabels();
 
-  $("#logout-btn").addEventListener("click", () => { clearToken(); showLogin(); });
+  // v3.2.0: logout invalida la session DB-side (revoke cookie + revoke session row)
+  $("#logout-btn").addEventListener("click", async () => {
+    try {
+      await fetch(`${API_BASE}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (e) { /* best-effort */ }
+    clearToken();
+    showLogin();
+  });
 
   // Contactos
   $("#contacts-refresh").addEventListener("click", loadContacts);
@@ -1639,51 +1836,391 @@
     }
   });
 
-  // ---------- Boot ----------
-  // Si la URL trae ?recover=<id>, intercambia con el backend y entra automáticamente.
-  // Si no, comportamiento normal: mostrar login (token vive sólo en memoria).
+  // ============================================================
+  //   v3.2.0: Usuarios tab (super_admin/admin)
+  // ============================================================
+  let _allUsers = [];
+
+  const RESOURCES_LABELS = {
+    contacts: "Contactos",
+    stats: "Estadísticas",
+    games_f2p: "Juegos F2P",
+    games_publishers: "Juegos Publishers",
+    site_links: "Configuración URLs",
+    delivery: "Formatos & Entrega",
+    info_columns: "Bloques Info",
+    analytics: "Analytics & GTM",
+    users: "Usuarios",
+  };
+  const RESOURCES_ORDER = [
+    "contacts", "stats", "games_f2p", "games_publishers",
+    "site_links", "delivery", "info_columns", "analytics", "users",
+  ];
+
+  async function loadUsers() {
+    const tbody = $("#users-tbody");
+    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Cargando…</td></tr>`;
+    try {
+      const json = await api("GET", "/api/users");
+      _allUsers = json.users || [];
+      $("#users-count").textContent =
+        `${_allUsers.length} ${_allUsers.length === 1 ? "usuario" : "usuarios"}`;
+      renderUsersRows();
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-red-400">Error: ${escapeHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  function roleBadge(role) {
+    const colors = {
+      super_admin: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+      admin: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+      editor: "bg-gray-500/20 text-gray-300 border-gray-500/30",
+    };
+    const labels = { super_admin: "super_admin", admin: "admin", editor: "editor" };
+    return `<span class="tag border ${colors[role] || ""}">${labels[role] || role}</span>`;
+  }
+
+  function statusBadge(status) {
+    const colors = {
+      active: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+      pending: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+      disabled: "bg-red-500/20 text-red-300 border-red-500/30",
+    };
+    const labels = { active: "activo", pending: "pendiente", disabled: "deshabilitado" };
+    return `<span class="tag border ${colors[status] || ""}">${labels[status] || status}</span>`;
+  }
+
+  function renderUsersRows() {
+    const tbody = $("#users-tbody");
+    if (!_allUsers.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No hay usuarios.</td></tr>`;
+      return;
+    }
+    const me = getCurrentUser();
+    tbody.innerHTML = _allUsers.map(u => {
+      const isMe = me && me.id === u.id;
+      const canManage = canActorManage(me, u);
+      return `
+        <tr class="hover:bg-white/5">
+          <td class="px-4 py-3">
+            <div class="font-medium">${escapeHtml(u.email)}</div>
+            ${isMe ? '<div class="text-[10px] text-brand-400">(tú)</div>' : ''}
+          </td>
+          <td class="px-4 py-3 text-gray-300">${escapeHtml(u.full_name || "—")}</td>
+          <td class="px-4 py-3">${roleBadge(u.role)}</td>
+          <td class="px-4 py-3">${statusBadge(u.status)}</td>
+          <td class="px-4 py-3 text-xs text-gray-400">${fmtDate(u.last_login_at)}</td>
+          <td class="px-4 py-3 text-xs text-gray-400">${escapeHtml(u.invited_by_email || (u.created_via === 'bootstrap' ? '—' : ''))}</td>
+          <td class="px-4 py-3 text-right space-x-1">
+            ${canManage ? `
+              <button data-action="edit" data-id="${u.id}"
+                      class="user-action px-2 py-1 text-xs text-brand-400 hover:bg-brand-500/10 rounded" title="Editar">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              ${u.status === 'pending' ? `
+                <button data-action="resend" data-id="${u.id}"
+                        class="user-action px-2 py-1 text-xs text-amber-400 hover:bg-amber-500/10 rounded" title="Reenviar invitación">
+                  <i class="fa-solid fa-envelope"></i>
+                </button>
+              ` : ''}
+              ${u.status === 'disabled' ? `
+                <button data-action="enable" data-id="${u.id}"
+                        class="user-action px-2 py-1 text-xs text-emerald-400 hover:bg-emerald-500/10 rounded" title="Reactivar">
+                  <i class="fa-solid fa-circle-check"></i>
+                </button>
+              ` : `
+                <button data-action="disable" data-id="${u.id}"
+                        class="user-action px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 rounded" title="Deshabilitar">
+                  <i class="fa-solid fa-ban"></i>
+                </button>
+              `}
+            ` : `
+              <span class="text-xs text-gray-600">—</span>
+            `}
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  // Mirror of can_actor_manage del backend (UI-only check, server hace el authoritative)
+  function canActorManage(actor, target) {
+    if (!actor || !target) return false;
+    if (actor.status !== "active") return false;
+    if (actor.role === "editor") return false;
+    if (actor.role === "admin") return target.role === "editor";
+    if (actor.role === "super_admin") return true;
+    return false;
+  }
+
+  function buildPermissionsRows(perms) {
+    return RESOURCES_ORDER.map(resource => {
+      const p = perms[resource] || {};
+      return `
+        <tr>
+          <td class="px-3 py-2 font-medium text-gray-300">${RESOURCES_LABELS[resource]}</td>
+          <td class="px-3 py-2 text-center">
+            <input type="checkbox" data-perm-resource="${resource}" data-perm-action="read"
+                   class="perm-cb" ${p.can_read ? "checked" : ""}>
+          </td>
+          <td class="px-3 py-2 text-center">
+            <input type="checkbox" data-perm-resource="${resource}" data-perm-action="write"
+                   class="perm-cb" ${p.can_write ? "checked" : ""}>
+          </td>
+          <td class="px-3 py-2 text-center">
+            <input type="checkbox" data-perm-resource="${resource}" data-perm-action="delete"
+                   class="perm-cb" ${p.can_delete ? "checked" : ""}>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function readPermissionsFromForm() {
+    const out = {};
+    RESOURCES_ORDER.forEach(r => {
+      out[r] = {
+        can_read: $(`input[data-perm-resource="${r}"][data-perm-action="read"]`)?.checked || false,
+        can_write: $(`input[data-perm-resource="${r}"][data-perm-action="write"]`)?.checked || false,
+        can_delete: $(`input[data-perm-resource="${r}"][data-perm-action="delete"]`)?.checked || false,
+      };
+    });
+    return out;
+  }
+
+  function openInviteModal() {
+    $("#user-modal-title").textContent = "Invitar usuario";
+    $("#user-mode").value = "invite";
+    $("#user-id").value = "";
+    $("#user-email").value = "";
+    $("#user-email").disabled = false;
+    $("#user-fullname").value = "";
+    $("#user-role").value = "editor";
+    $("#user-status-section").classList.add("hidden");
+    $("#user-edit-banner").classList.add("hidden");
+    $("#user-form-error").classList.add("hidden");
+    $("#user-form-submit-label").textContent = "Enviar invitación";
+    // Si actor es admin, oculta opciones admin/super_admin
+    const actor = getCurrentUser();
+    $$("#user-role option").forEach(opt => {
+      const restriction = opt.dataset.roleRestriction;
+      opt.disabled = restriction && actor.role !== restriction;
+      if (opt.disabled) opt.hidden = true;
+      else opt.hidden = false;
+    });
+    $("#user-perms-tbody").innerHTML = buildPermissionsRows({});
+    togglePermissionsSection();
+    openModal("#user-modal");
+    $("#user-email").focus();
+  }
+
+  async function openEditModal(userId) {
+    try {
+      const json = await api("GET", `/api/users/${userId}`);
+      const u = json.user;
+      const perms = json.permissions || {};
+      $("#user-modal-title").textContent = "Editar usuario";
+      $("#user-mode").value = "edit";
+      $("#user-id").value = u.id;
+      $("#user-email").value = u.email;
+      $("#user-email").disabled = true;
+      $("#user-fullname").value = u.full_name || "";
+      $("#user-role").value = u.role;
+      $("#user-status").value = u.status;
+      $("#user-status-section").classList.remove("hidden");
+      $("#user-edit-banner").classList.remove("hidden");
+      $("#user-form-error").classList.add("hidden");
+      $("#user-form-submit-label").textContent = "Guardar cambios";
+      const actor = getCurrentUser();
+      $$("#user-role option").forEach(opt => {
+        const restriction = opt.dataset.roleRestriction;
+        opt.disabled = restriction && actor.role !== restriction;
+        if (opt.disabled) opt.hidden = true;
+        else opt.hidden = false;
+      });
+      $("#user-perms-tbody").innerHTML = buildPermissionsRows(perms);
+      togglePermissionsSection();
+      openModal("#user-modal");
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  }
+
+  function togglePermissionsSection() {
+    const role = $("#user-role").value;
+    const section = $("#user-permissions-section");
+    section.classList.toggle("hidden", role !== "editor");
+  }
+
+  async function submitUserForm(e) {
+    e.preventDefault();
+    const errEl = $("#user-form-error");
+    errEl.classList.add("hidden");
+    const mode = $("#user-mode").value;
+    const role = $("#user-role").value;
+    const fullname = $("#user-fullname").value.trim() || null;
+    const permissions = readPermissionsFromForm();
+
+    try {
+      if (mode === "invite") {
+        const email = $("#user-email").value.trim();
+        const payload = {
+          email, full_name: fullname, role,
+          permissions: role === "editor" ? permissions : null,
+        };
+        const json = await api("POST", "/api/users/invite", payload);
+        $("#user-modal").classList.add("hidden");
+        if (json.email_sent) {
+          alert(`Invitación enviada a ${email}.`);
+        } else {
+          alert(`Invitación creada (id=${json.invitation.id.slice(0,8)}…) pero el email FALLÓ. Revisá SES.`);
+        }
+        loadUsers();
+      } else {
+        const userId = $("#user-id").value;
+        const status = $("#user-status").value;
+        const payload = {
+          full_name: fullname,
+          role,
+          status,
+          permissions: role === "editor" ? permissions : null,
+        };
+        await api("PATCH", `/api/users/${userId}`, payload);
+        $("#user-modal").classList.add("hidden");
+        loadUsers();
+      }
+    } catch (err) {
+      errEl.textContent = err.message || "Error al guardar";
+      errEl.classList.remove("hidden");
+    }
+  }
+
+  async function disableUser(userId) {
+    if (!confirm("¿Deshabilitar este usuario? Sus sesiones activas serán cerradas.")) return;
+    try {
+      await api("DELETE", `/api/users/${userId}`);
+      loadUsers();
+    } catch (e) { alert("Error: " + e.message); }
+  }
+
+  async function enableUser(userId) {
+    try {
+      await api("PATCH", `/api/users/${userId}`, { status: "active" });
+      loadUsers();
+    } catch (e) { alert("Error: " + e.message); }
+  }
+
+  async function resendInvitation(userId) {
+    if (!confirm("¿Reenviar invitación? La invitación anterior queda revocada.")) return;
+    try {
+      const json = await api("POST", `/api/users/${userId}/resend-invitation`);
+      alert(json.email_sent ? "Invitación reenviada." : "Invitación creada pero el email falló (revisar SES).");
+    } catch (e) { alert("Error: " + e.message); }
+  }
+
+  // Listeners de Usuarios tab
+  if ($("#users-refresh")) {
+    $("#users-refresh").addEventListener("click", loadUsers);
+    $("#users-invite-btn").addEventListener("click", openInviteModal);
+    $("#user-form").addEventListener("submit", submitUserForm);
+    $("#user-role").addEventListener("change", togglePermissionsSection);
+    $("#perms-grant-all").addEventListener("click", () => {
+      $$("input.perm-cb").forEach(cb => cb.checked = true);
+    });
+    $("#perms-clear-all").addEventListener("click", () => {
+      $$("input.perm-cb").forEach(cb => cb.checked = false);
+    });
+    $("#users-tbody").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const id = parseInt(btn.dataset.id, 10);
+      const action = btn.dataset.action;
+      if (action === "edit") openEditModal(id);
+      if (action === "disable") disableUser(id);
+      if (action === "enable") enableUser(id);
+      if (action === "resend") resendInvitation(id);
+    });
+  }
+
+  // ---------- Boot (v3.2.0) ----------
+  // Flujo:
+  //   1. Si bootstrap_done=false → mostrar wizard de bootstrap
+  //   2. Sino → GET /api/auth/me (vía cookie). Si OK → showApp(). Si 401 → showLogin()
+  //   3. Legacy: ?recover=<id> sigue funcionando como path de fallback
+  //      (magic link que el sistema viejo manda). Va a quedar habilitado hasta
+  //      que se elimine /api/admin/exchange-recovery en una versión futura.
   (async function boot() {
     const params = new URLSearchParams(window.location.search);
     const recoveryId = params.get("recover");
 
+    // Path legacy: ?recover=<id> (ADMIN_TOKEN-based). Solo válido pre-bootstrap.
     if (recoveryId) {
-      // Limpia la URL inmediatamente (antes del exchange) para que el recovery_id
-      // no quede en history/screenshots/shares.
       window.history.replaceState({}, "", window.location.pathname);
-
+      showLogin();
       const errEl  = $("#login-error");
       const infoEl = $("#login-info");
-      // Asegúrate de mostrar la vista de login antes de mensajear
-      showLogin();
       infoEl.textContent = "Verificando enlace de recuperación…";
       infoEl.classList.remove("hidden");
-
       try {
         const res = await fetch(`${API_BASE}/api/admin/exchange-recovery`, {
-          method:  "POST",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ recovery_id: recoveryId }),
+          body: JSON.stringify({ recovery_id: recoveryId }),
         });
         const json = await res.json().catch(() => ({}));
         if (res.ok && json.ok && json.admin_token) {
-          setToken(json.admin_token);
+          // Solo funciona si bootstrap_done=false. Tras ello el endpoint
+          // del backend retorna 500/401 igual.
           infoEl.classList.add("hidden");
-          showApp();
+          // Pre-bootstrap: muestra el wizard pre-poblando token
+          $("#bootstrap-token").value = json.admin_token;
+          showBootstrap();
           return;
         }
         infoEl.classList.add("hidden");
-        errEl.textContent = "Enlace inválido o expirado. Solicita uno nuevo.";
+        errEl.textContent = "Enlace inválido o expirado.";
         errEl.classList.remove("hidden");
-        return;
       } catch (e) {
         infoEl.classList.add("hidden");
         errEl.textContent = "Error de red al validar el enlace.";
         errEl.classList.remove("hidden");
-        return;
       }
+      return;
     }
 
-    if (getToken()) showApp();
-    else            showLogin();
+    // Path normal: chequear bootstrap_done y session.
+    try {
+      const bsRes = await fetch(`${API_BASE}/api/auth/bootstrap-status`, {
+        credentials: "include",
+      });
+      const bsJson = await bsRes.json().catch(() => ({}));
+      if (!bsJson.bootstrap_done) {
+        showBootstrap();
+        return;
+      }
+    } catch (e) {
+      // Si no podemos chequear el status, default a login
+      showLogin();
+      return;
+    }
+
+    // bootstrap_done=true → intentar /api/auth/me con cookie
+    try {
+      const meRes = await fetch(`${API_BASE}/api/auth/me`, {
+        credentials: "include",
+      });
+      if (meRes.ok) {
+        const meJson = await meRes.json();
+        if (meJson.ok && meJson.user) {
+          _currentUser = meJson.user;
+          _currentPermissions = meJson.permissions || {};
+          showApp();
+          return;
+        }
+      }
+    } catch (e) { /* network error → login */ }
+
+    showLogin();
   })();
 })();

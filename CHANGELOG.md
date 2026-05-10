@@ -7,6 +7,105 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ---
 
+## [3.2.0-rc2] — 2026-05-10
+
+### Frontend foundations — multi-user UI (M3)
+
+Reemplaza el login del admin con email + password, agrega una pestaña
+**Usuarios** completa con CRUD + invitations + permissions matrix, y crea
+una página pública `/admin/invitation/` para que los invitados activen
+su cuenta. Backend (rc1) ya estaba listo.
+
+### Added
+
+**`admin/index.html`**:
+
+- **Login UI** — email + password en lugar de un solo input de token.
+  "¿Olvidé contraseña?" mantiene el magic-link existente (TODO M4: migrar
+  a `/api/auth/forgot-password` post-bootstrap).
+- **Bootstrap wizard** — pantalla nueva mostrada si `bootstrap_done=false`:
+  ADMIN_TOKEN + email + nombre + password → crea super_admin + auto-login.
+- **Sidebar**: nav-btn "Usuarios" (visible solo a super_admin/admin),
+  card de user info (nombre + role) en footer.
+- **Section `users-view`**: tabla con email, nombre, rol, status, último
+  login, invitado por, acciones (editar / disable / re-enable / resend).
+- **Modal `user-modal`** unificado para invite + edit:
+  - Selector de role (admin oculta opciones admin/super_admin)
+  - Permissions matrix con 9 recursos × 3 acciones (read/write/delete)
+  - "Marcar todo / Desmarcar todo" shortcuts
+  - Status select solo en mode=edit
+
+**`admin/app.js`**:
+
+- Reemplazado `_adminToken` por `_currentUser` + `_currentPermissions`.
+- `api()` y `apiUpload()`: ahora usan `credentials: "include"` (cookies
+  HttpOnly cross-origin) en lugar de `Authorization: Bearer`.
+- Helpers nuevos: `getCurrentUser()`, `getRole()`, `hasPermission(resource, action)`,
+  `isRole(...)`, `applyNavGating()`, `pickInitialView()`.
+- Boot logic v3.2.0:
+  1. Si `bootstrap_done=false` → wizard
+  2. Sino → GET `/api/auth/me`. Si OK → app. Si 401 → login.
+  3. Legacy: `?recover=<id>` sigue funcionando (pre-bootstrap path).
+- 13 funciones nuevas para Usuarios tab: `loadUsers`, `renderUsersRows`,
+  `openInviteModal`, `openEditModal`, `submitUserForm`, `disableUser`,
+  `enableUser`, `resendInvitation`, `buildPermissionsRows`,
+  `readPermissionsFromForm`, `togglePermissionsSection`, `roleBadge`,
+  `statusBadge`, `canActorManage` (mirror del backend para UI gating).
+
+**`admin/invitation/index.html`** (página pública nueva):
+
+- Lee `?id=<token>` del URL
+- GET `/api/invitations/:token` para mostrar info (quién invita, role, expiry)
+- Form de password (con confirmación)
+- POST `/api/invitations/:token/accept` → cookie session + redirect a `/admin/`
+- Estados: loading / error / accept-form
+- `noindex,nofollow` (no debe aparecer en search)
+
+### Changed
+
+**`server/app.py` CORS**:
+
+- `supports_credentials=False` → `True`. Necesario para que el browser
+  envíe la cookie `monou_session` cross-origin (admin en `monoulabs.ai`
+  → API en `api.monoulabs.ai`).
+- **Acción requerida en deploy**: `ALLOWED_ORIGIN` Parameter Store ya no
+  puede ser `"*"`. Setear a `"https://monoulabs.ai"` (al menos).
+
+### Migration / deploy notes
+
+1. **Verificar `ALLOWED_ORIGIN`** antes de deploy:
+   ```bash
+   aws ssm get-parameter --name /monou/prod/ALLOWED_ORIGIN \
+     --query 'Parameter.Value' --output text
+   ```
+   Si dice `*`, cambiar a `https://monoulabs.ai`:
+   ```bash
+   aws ssm put-parameter --name /monou/prod/ALLOWED_ORIGIN \
+     --value 'https://monoulabs.ai' --overwrite --type String
+   ```
+
+2. Deploy backend + frontend juntos (CORS en ambos lados):
+   ```bash
+   ./deploy.sh v3.2.0-rc2
+   ./deploy-frontend.sh
+   ```
+
+3. Smoke test E2E:
+   - Logout (si estás logueado) → debería pedir login con email+password
+   - Bootstrap si bootstrap_done=false (debería ya estar true tras rc1)
+   - Login con email+password del super_admin
+   - Tab Usuarios → invitar a `tu-otro-email@x.com` con role=editor +
+     permissions={contacts:{read:true}}
+   - Abrir email recibido → click magic link → set password → debería
+     auto-login en otra cuenta como editor con UI restringida (solo Contactos)
+
+### Pending (M4 / M5)
+
+- M4: Audit log viewer, forgot-password post-bootstrap
+- M5: Cleanup ADMIN_TOKEN del Secret, docs USER-MANAGEMENT.md, tag v3.2.0 final
+
+---
+
 ## [3.2.0-rc1] — 2026-05-10
 
 ### Backend foundations — multi-user system (M1 + M2)
