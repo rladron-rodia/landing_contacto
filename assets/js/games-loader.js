@@ -46,6 +46,91 @@
       const cards = document.querySelectorAll(`[data-game-slug="${game.slug}"]`);
       cards.forEach(card => updateCard(card, game, lang));
     });
+    reorderCards(games);
+  }
+
+  // Reordena las cards del DOM según el `display_order` que viene del admin.
+  // Antes el HTML tenía las cards en posiciones fijas y el JS solo parchaba
+  // su contenido, así que mover un juego en el admin no se reflejaba en la
+  // landing. Ahora reposicionamos físicamente cada card.
+  //
+  // Maneja 3 layouts:
+  //   - Desktop F2P (#carouselTrack): cards repartidas en N .carousel-item;
+  //     hacemos flatten + redistribute (mismo número de cards por slide que
+  //     había originalmente, asumiendo 3) para que el ordenamiento sea
+  //     global, no solo intra-slide.
+  //   - Mobile F2P (#ir9pjh) + Publishers (grid único): un solo contenedor
+  //     con todas las cards; reordenamos sus hijos in-place y dejamos
+  //     cualquier hijo sin data-game-slug (CTA "Ver catálogo") al final.
+  function reorderCards(games) {
+    if (!Array.isArray(games) || games.length === 0) return;
+
+    const orderMap = new Map();
+    games.forEach((g, idx) => {
+      if (!g || !g.slug) return;
+      const ord = (typeof g.display_order === "number") ? g.display_order : idx;
+      orderMap.set(g.slug, ord);
+    });
+
+    const cardOrder = (card) => {
+      const slug = card.getAttribute("data-game-slug");
+      return orderMap.has(slug) ? orderMap.get(slug) : Number.POSITIVE_INFINITY;
+    };
+
+    // --- Desktop F2P carousel: flatten + redistribute ---------------------
+    const carouselTrack = document.getElementById("carouselTrack");
+    if (carouselTrack) {
+      const gameSlides = Array.from(carouselTrack.querySelectorAll(".carousel-item"))
+        .filter(s => s.querySelector("[data-game-slug]"));
+      if (gameSlides.length > 0) {
+        const allCards = [];
+        gameSlides.forEach(slide => {
+          Array.from(slide.querySelectorAll("[data-game-slug]"))
+            .forEach(card => allCards.push(card));
+        });
+        // sort estable: respeta el orden previo para cards con el mismo `order`
+        allCards.sort((a, b) => cardOrder(a) - cardOrder(b));
+        const grids = gameSlides.map(s => s.querySelector(".grid") || s);
+        // Usamos el número de cards del primer slide como capacidad (3 por slide
+        // en la implementación actual). Si la API trae más cards de las que
+        // caben (3 × N slides), las extra se acumulan en el último slide
+        // — no rompe el layout pero el grid se ve apretado; aceptable.
+        const firstGridCount = grids[0].querySelectorAll("[data-game-slug]").length || 3;
+        allCards.forEach((card, idx) => {
+          const slideIdx = Math.min(Math.floor(idx / firstGridCount), grids.length - 1);
+          grids[slideIdx].appendChild(card);  // appendChild mueve el nodo, no lo clona
+        });
+      }
+    }
+
+    // --- Resto de contenedores con cards [data-game-slug] ----------------
+    // Agrupamos por parentElement. Si el parent ya está dentro de
+    // #carouselTrack saltamos (ya lo procesamos arriba).
+    const allOtherCards = Array.from(document.querySelectorAll("[data-game-slug]"))
+      .filter(c => !c.closest("#carouselTrack"));
+    const byParent = new Map();
+    allOtherCards.forEach(card => {
+      const p = card.parentElement;
+      if (!p) return;
+      if (!byParent.has(p)) byParent.set(p, []);
+      byParent.get(p).push(card);
+    });
+    byParent.forEach((cards, parent) => {
+      if (cards.length < 2) return;  // nada que reordenar
+      const sorted = cards.slice().sort((a, b) => cardOrder(a) - cardOrder(b));
+      // Determinamos punto de anclaje: el primer hijo del parent que NO sea
+      // una card de juego. Las cards ordenadas se insertan antes de él,
+      // preservando cualquier CTA o elemento extra al final.
+      const firstNonGame = Array.from(parent.children)
+        .find(c => !c.hasAttribute("data-game-slug")) || null;
+      sorted.forEach(card => {
+        if (firstNonGame) {
+          parent.insertBefore(card, firstNonGame);
+        } else {
+          parent.appendChild(card);
+        }
+      });
+    });
   }
 
   function updateCard(card, game, lang) {
