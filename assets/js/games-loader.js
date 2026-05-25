@@ -70,17 +70,59 @@
       if (text) descEl.textContent = text;
     }
 
-    // Tags (por índice)
-    const tagEls = card.querySelectorAll('[data-game-field="tag"]');
-    tagEls.forEach(tag => {
-      const idx = parseInt(tag.dataset.tagIndex || "0", 10);
-      const tagEs = game.tags_es && game.tags_es[idx];
-      const tagEn = game.tags_en && game.tags_en[idx];
-      if (tagEs) tag.setAttribute("data-es", tagEs);
-      if (tagEn) tag.setAttribute("data-en", tagEn);
-      const text = (lang === "en" ? tagEn : tagEs) || tagEs || tagEn;
-      if (text) tag.textContent = text;
-    });
+    // Tags — sincronizamos el número de <span> con el número de tags que
+    // vienen de la API. Antes la card tenía hardcodeados 2 spans y el JS
+    // solo actualizaba los existentes, así que el admin podía guardar 3+
+    // tags pero la landing solo mostraba 2. Ahora creamos/eliminamos
+    // dinámicamente para que aparezcan todos los que se configuren.
+    const existingTagEls = Array.from(card.querySelectorAll('[data-game-field="tag"]'));
+    const tagsEs = Array.isArray(game.tags_es) ? game.tags_es : [];
+    const tagsEn = Array.isArray(game.tags_en) ? game.tags_en : [];
+    const tagCount = Math.max(tagsEs.length, tagsEn.length);
+
+    if (tagCount > 0) {
+      // Localizar el contenedor: el padre del primer span de tag.
+      // Si no existen spans aún (cards sin fallback hardcodeado), buscamos
+      // un contenedor opcional marcado con data-game-field="tags".
+      let container = existingTagEls.length > 0 ? existingTagEls[0].parentElement : null;
+      if (!container) container = card.querySelector('[data-game-field="tags"]');
+
+      if (container) {
+        // flex-wrap para que >2 tags no rompan la card mobile (w-64).
+        if (tagCount > 2 && !container.classList.contains("flex-wrap")) {
+          container.classList.add("flex-wrap", "gap-y-1");
+        }
+
+        // Plantilla de className: heredamos del primer span existente para
+        // mantener el look-and-feel; si no hay ninguno, usamos el default.
+        const tagClassName = existingTagEls[0]
+          ? existingTagEls[0].className
+          : "px-2 py-1 bg-dark-800 rounded text-gray-400";
+
+        for (let i = 0; i < tagCount; i++) {
+          let tag = existingTagEls[i];
+          if (!tag) {
+            tag = document.createElement("span");
+            tag.setAttribute("data-game-field", "tag");
+            tag.className = tagClassName;
+            container.appendChild(tag);
+          }
+          tag.setAttribute("data-tag-index", String(i));
+          const tagEs = tagsEs[i];
+          const tagEn = tagsEn[i];
+          if (tagEs) tag.setAttribute("data-es", tagEs);
+          if (tagEn) tag.setAttribute("data-en", tagEn);
+          const text = (lang === "en" ? tagEn : tagEs) || tagEs || tagEn;
+          if (text) tag.textContent = text;
+        }
+
+        // Eliminar los spans sobrantes si la API devuelve menos tags
+        // que los que había hardcodeados en el HTML.
+        for (let i = tagCount; i < existingTagEls.length; i++) {
+          existingTagEls[i].remove();
+        }
+      }
+    }
 
     // Image — algunas cards solo tienen un <i> icon, sin <img>. Si llega
     // una image_url y no hay <img> aún, lo creamos dentro del contenedor
