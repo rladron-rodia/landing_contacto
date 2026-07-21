@@ -9,7 +9,7 @@ psycopg[binary]==3.2.3
 # Vectores: FITS GZIP bomb, PSD OOB writes, PDF parsing DoS, font integer overflow,
 # nested list coords heap overflow. Ninguno explotable en nuestro código (solo
 # aceptamos PNG/JPG/WebP/GIF) pero defense in depth.
-Pillow==12.2.0
+Pillow==12.3.0
 boto3==1.42.97
 # v3.2.0: password hashing para sistema multi-usuario.
 # bcrypt es un binding C bien-mantenido, ~250ms por hash@cost12 (target login).
