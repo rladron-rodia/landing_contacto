@@ -1,4 +1,6 @@
 <html lang="es"><head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -63,9 +65,6 @@
          de tailwind.min.css (Lighthouse: critical chain ~354ms).
          Con preload arrancan en paralelo al HTML parse y no quedan en
          serie con Tailwind. -->
-    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-400.woff2" crossorigin>
-    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-600.woff2" crossorigin>
-    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-700.woff2" crossorigin>
 
     <!-- ═══ Theme & mobile hints ═══ -->
     <meta name="theme-color" content="#0B0E14">
@@ -247,33 +246,18 @@
     <!-- FontAwesome subset (16 KB) — async OK porque los iconos no son
          layout-critical (parpadean brevemente en cuadritos hasta que carga,
          pero no reposicionan otros elementos). -->
-    <link rel="preload" href="assets/css/fa-subset.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="assets/css/fa-subset.min.css"></noscript>
     <!-- Preload solo de fa-regular-400 (24 KB, usado en iconos above-the-fold).
          fa-solid-900 (156 KB) NO se preloadea porque no está en el LCP path
          y bloquea la red para los Inter fonts críticos (v3.1.1 patch). -->
-    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/fa-regular-400.woff2" crossorigin>
 
     <!-- ═══ Inter font self-hosted (v2.4.2 — eliminamos fonts.googleapis.com 750ms) ═══ -->
     <!-- @font-face local con font-display:swap y unicode-range latin para reducir peso.
          Si los woff2 aún no están en assets/fonts/, ver instrucciones en
          README.md sección "Self-host Inter font". -->
     <style>
-      @font-face{
-        font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;
-        src:url('assets/fonts/inter-400.woff2') format('woff2');
-        unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
-      }
-      @font-face{
-        font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;
-        src:url('assets/fonts/inter-600.woff2') format('woff2');
-        unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
-      }
-      @font-face{
-        font-family:'Inter';font-style:normal;font-weight:700;font-display:swap;
-        src:url('assets/fonts/inter-700.woff2') format('woff2');
-        unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
-      }
+      
+      
+      
     </style>
     <!-- v2.1.5: la config de Tailwind ya está compilada estáticamente en assets/css/tailwind.min.css.
          Este bloque solo aplica si alguien re-introduce el CDN de Tailwind (dev) — guard contra ReferenceError. -->
@@ -289,12 +273,16 @@
       }
       h1, h2, h3, h4, .font-display, .kpi-number { font-family:'Rubik', sans-serif; }
 
+      /* v7.3 — grid más visible pero sutil, tinte blanco cálido + tenue acento rojo */
       .grid-bg {
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.055) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.055) 1px, transparent 1px);
         background-size:40px 40px;
         background-position:center center;
         opacity:1;
-        mask-image:radial-gradient(circle at center, black 55%, transparent 100%);
-        -webkit-mask-image:radial-gradient(circle at center, black 55%, transparent 100%);
+        mask-image:radial-gradient(ellipse at center, black 40%, transparent 90%);
+        -webkit-mask-image:radial-gradient(ellipse at center, black 40%, transparent 90%);
       }
       .glass-card {
         background:rgba(15,31,48,0.7);
@@ -410,16 +398,17 @@
       /* evita que glow neón de un card se cuele sobre el siguiente slide */
       #juegos-monou .glass-card { contain: layout; }
     
-      /* v7.2 — mini-wall de logos de juegos por categoría */
+      /* v7.3 — mini-wall de logos de juegos por categoría (2×2 → 4 tiles sin repetir) */
       .game-wall {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        grid-template-rows: repeat(2, 1fr);
-        gap: 5px;
-        padding: 10px;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        gap: 4px;
+        padding: 8px;
         width: 100%;
         height: 100%;
       }
+
       .game-tile {
         position: relative;
         display: flex; align-items: center; justify-content: center;
@@ -432,7 +421,7 @@
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
       .game-tile i {
-        font-size: 0.78rem;
+        font-size: 1.4rem;
         opacity: 0.85;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
@@ -447,12 +436,11 @@
         opacity: 1;
         transform: scale(1.08);
       }
-      /* mobile scroller — grid 2×2 compacto para no reventar aspect-video 16:9 estrecho */
       .md\:hidden .game-wall {
-        grid-template-columns: repeat(4, 1fr);
-        grid-template-rows: repeat(2, 1fr);
-        padding: 8px;
-        gap: 4px;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        padding: 6px;
+        gap: 3px;
       }
     </style>
     <style data-grapesjs-styles="true">
@@ -469,7 +457,7 @@
   
     <!-- ═══ Backend API base — platform-deploy cms-landing ═══ -->
     <!-- staging: https://staging.internal.monou.gg · prod: https://internal.monou.gg -->
-    <meta name="api-base" content="https://staging.internal.monou.gg">
+    <meta name="api-base" content="https://internal.monou.gg">
     <script src="server/cms-landing-loader.js" defer></script>
 
     <!-- ═══ Google Analytics 4 — same tracking stack as plataforma deploy ═══ -->
@@ -528,8 +516,10 @@
           <span class="w-2 h-2 rounded-full bg-tertiary animate-pulse pulse-dot"></span><span data-link-field="label" data-es="Dataset v2.0 ya disponible" data-en="Dataset v2.0 now available" class="text-xs font-medium text-primary">Dataset v2.0 ya
             disponible</span></div>
         <h1 class="text-5xl md:text-7xl font-extrabold text-white tracking-tight leading-[1.1] mb-6 max-w-4xl">
-          <span data-es="Gameplay Datasets para" data-en="Gameplay Datasets for">Gameplay Datasets para</span> <br class="hidden md:block"><span data-es="World Models &amp; IA" data-en="World Models &amp; AI" class="text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-tertiary">World
-            Models &amp; IA</span></h1>
+          <span data-es="Gameplay Datasets para" data-en="Gameplay Datasets for">Gameplay Datasets para</span>
+          <br class="hidden md:block">
+          <span data-es="World Models &amp; IA" data-en="World Models &amp; AI" style="background:linear-gradient(90deg,#F91F44 0%,#704EFC 50%,#F59E0B 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;">World Models &amp; IA</span>
+        </h1>
         <p data-es="Entrena agentes de IA con miles de horas de gameplay capturado, curado y etiquetado. Datos masivos de juegos F2P y títulos AAA de terceros." data-en="Train AI agents with thousands of hours of captured, curated and labeled gameplay. Massive data from F2P games and third-party AAA titles." class="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl font-medium">
           Entrena agentes de IA con miles de horas de gameplay capturado, curado
           y etiquetado. Datos masivos de juegos F2P y títulos AAA de terceros.
@@ -545,7 +535,7 @@
             diseñada para IA</h2>
           <p data-es="Datos reales de producción, protocolo abierto VVR v1.1, listos para ingerir en tu pipeline de entrenamiento. No son demostraciones de laboratorio." data-en="Production data under the open VVR v1.1 protocol, ready to ingest into your training pipeline. Not laboratory demos." class="text-gray-400 max-w-2xl mx-auto">Datos reales de producción, protocolo abierto VVR v1.1, listos para ingerir en tu pipeline de entrenamiento. No son demostraciones de laboratorio.</p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div class="glass-card p-8 rounded-2xl flex flex-col items-center text-center relative overflow-hidden group">
             <div class="absolute inset-0 bg-gradient-to-b from-primary/8 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
             </div><i class="fa-regular fa-clock text-3xl text-primary mb-6"></i>
@@ -566,6 +556,13 @@
             <h3 data-stat-value="games_covered" class="text-5xl font-bold text-white mb-2 tracking-tight kpi-number font-black"><span data-live-metric="games_emitting_30d" data-fallback="250+">250+</span></h3>
             <p data-stat-label="games_covered" data-es="Juegos activos emitiendo VVR" data-en="Active games emitting VVR" class="text-sm font-medium text-gray-400 uppercase tracking-wide">
               Juegos Cubiertos</p>
+          </div>
+          <div class="glass-card p-8 rounded-2xl flex flex-col items-center text-center relative overflow-hidden group">
+            <div class="absolute inset-0 bg-gradient-to-b from-accent-purple/8 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+            </div><i class="fa-solid fa-stopwatch text-3xl text-accent-purple mb-6"></i>
+            <h3 data-stat-value="hours_total" class="text-5xl font-bold text-white mb-2 tracking-tight kpi-number font-black"><span data-live-metric="hours_captured_total" data-fallback="12K+">12K+</span><span class="text-3xl text-accent-purple ml-1">h</span></h3>
+            <p data-stat-label="hours_total" data-es="Horas de grabación VVR" data-en="VVR recording hours" class="text-sm font-medium text-gray-400 uppercase tracking-wide">
+              Horas de Grabación</p>
           </div>
         </div>
       </section><!-- COMO FUNCIONA (Workflow) -->
@@ -745,16 +742,16 @@
             </div>
             <div class="carousel-item">
               <div class="flex items-center justify-center h-full">
-                <div data-link-key="view_full_catalog" class="glass-card hover-lift rounded-2xl p-12 border border-white/5 hover:border-primary/40 transition-all group cursor-pointer text-center max-w-md">
-                  <div class="w-24 h-24 mx-auto bg-gradient-to-br from-primary/15 to-secondary/15 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform glow-red">
-                    <i class="fa-solid fa-grid-2-plus text-4xl text-transparent bg-clip-text bg-gradient-to-br from-primary to-secondary"></i>
+                <a href="#contacto" data-link-key="view_full_catalog" class="glass-card hover-lift rounded-2xl p-12 border border-white/5 hover:border-primary/40 transition-all group cursor-pointer text-center max-w-md block no-underline">
+                  <div class="w-32 h-32 mx-auto bg-gradient-to-br from-primary/15 to-secondary/15 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform glow-red">
+                    <span class="font-display font-black text-3xl tracking-tight leading-none"><span class="text-white">monou</span><span class="text-gray-400">labs</span><span class="text-primary">.ai</span></span>
                   </div>
-                  <h3 data-es="26 categorías · 250+ juegos" data-en="26 categories · 250+ games" class="text-2xl font-display font-black text-white mb-4">26 categorías · 250+ juegos</h3>
-                  <p data-es="El catálogo completo se ordena automáticamente por volumen de sesiones y horas capturadas. Nuevas categorías se incorporan al pipeline cada mes." data-en="The complete catalog is sorted automatically by session volume and captured hours. New categories join the pipeline every month." class="text-gray-400 mb-6 leading-relaxed">El catálogo completo se ordena automáticamente por volumen de sesiones y horas capturadas. Nuevas categorías se incorporan al pipeline cada mes.</p>
+                  <h3 data-es="¿Tu modelo necesita datasets de gameplay?" data-en="Need gameplay datasets for your model?" class="text-2xl font-display font-black text-white mb-4">¿Tu modelo necesita datasets de gameplay?</h3>
+                  <p data-es="Hablemos de tu caso de uso: behavior cloning, PPO, world models o investigación académica. Respuesta en 24 horas." data-en="Let's talk about your use case: behavior cloning, PPO, world models or academic research. 24-hour response." class="text-gray-400 mb-6 leading-relaxed">Hablemos de tu caso de uso: behavior cloning, PPO, world models o investigación académica. Respuesta en 24 horas.</p>
                   <div data-link-field="cta" class="inline-flex items-center gap-2 px-6 py-3 btn-monou-primary rounded-xl glow-red">
-                    <span data-link-field="label" data-es="Solicitar catálogo completo" data-en="Request full catalog">Solicitar catálogo completo</span><i class="fa-solid fa-arrow-right text-sm"></i>
+                    <span data-link-field="label" data-es="Contáctanos" data-en="Contact us">Contáctanos</span><i class="fa-solid fa-arrow-right text-sm"></i>
                   </div>
-                </div>
+                </a>
               </div>
             </div>
           </div>
@@ -992,8 +989,7 @@
     <footer id="footer" role="contentinfo" aria-label="Pie de página" class="w-full border-t border-white/5 bg-dark-900/50 backdrop-blur-lg relative z-10 py-12">
       <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
         <div class="flex items-center gap-2"><span class="font-bold text-lg tracking-tight"><span class="text-white">monoulabs</span><span class="text-gray-500">.ai</span></span></div>
-        <div class="flex items-center gap-6 text-sm text-gray-500"><a data-link-key="privacy_terms" href="#" data-es="Términos de Privacidad" data-en="Privacy Terms" class="hover:text-white transition-colors">Términos de
-            Privacidad</a><a data-link-key="data_licenses" href="#" data-es="Licencias de Datos" data-en="Data Licenses" class="hover:text-white transition-colors">Licencias de Datos</a></div>
+        <div class="flex items-center gap-6 text-sm text-gray-500"><a data-link-key="privacy_terms" href="https://monou.gg/terminos" target="_blank" rel="noopener" data-es="Términos de Privacidad" data-en="Privacy Terms" class="hover:text-white transition-colors">Términos de Privacidad</a></div>
         <div class="text-xs text-gray-600">
           © 2026 Monou Labs. AI Training Infrastructure.
         </div>
@@ -1148,12 +1144,5 @@
 
 <!-- Override opcional de la URL del backend (déjalo comentado en prod):
          <meta name="api-base" content="https://otro-backend.com"> -->
-    <script src="assets/js/contact-form.js" defer></script>
-    <script src="assets/js/stats-loader.js" defer></script>
-    <script src="assets/js/games-loader.js?v=20260525b" defer></script>
-    <script src="assets/js/links-loader.js" defer></script>
-    <script src="assets/js/delivery-loader.js" defer></script>
-    <script src="assets/js/info-columns-loader.js" defer></script>
     <!-- v2.2.0: analytics-loader inyecta GA4/GTM dinámicamente desde admin (assets/js/analytics-loader.js) -->
-    <script src="assets/js/analytics-loader.js" defer></script>
   </body></html>

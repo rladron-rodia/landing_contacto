@@ -26,18 +26,33 @@
 
   // ─── Config ───────────────────────────────────────────────────────────
   var meta = document.querySelector('meta[name="api-base"]');
-  var API_BASE = (meta && meta.content) || 'https://staging.internal.monou.gg';
+  var API_BASE = (meta && meta.content) || 'https://internal.monou.gg';
   API_BASE = API_BASE.replace(/\/+$/, '');
   var CD = API_BASE + '/api/public/cms-landing';
 
+  // #500 v7.4 — El wall usa SOLO imágenes del catálogo real de platform-deploy.
+  //            Removido WALL_FALLBACK al bucket del landing viejo.
+  //            Si un thumbnail del CDN falla, el tile queda oculto (onerror).
+  // 4 imágenes únicas por categoría — distribución curada:
+  // - Carreras: 2 monou + 2 pub acción/arcade
+  // - Puzzles: 3 monou + minecraft
+  // - Acción: 2 monou + 2 pub combat
+  // - Plataforma: monou-bird/pacman + 2 pub plataforma-style
+  // - Estrategia: 2 pub estratégicos + 2 monou
+  // - Aventura: monou-attack/bird + 2 pub open world
+  // - Simulación: monou-pacman/bird + minecraft/roblox
+  // - Deportes: 2 pub (brawl/clash) + 2 monou
+  // Sin WALL_FALLBACK — solo imágenes del catálogo platform-deploy.
+
   // ─── Utils ────────────────────────────────────────────────────────────
   function fmt(n) {
-    if (n === null || n === undefined) return null;
+    if (n === null || n === undefined || n === '') return null;
     if (typeof n === 'string') n = parseFloat(n);
     if (!isFinite(n)) return null;
     if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/,'') + 'M+';
     if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K+';
-    return String(n);
+    // número bajo: devuelve con separadores de miles (en-US → comas)
+    return Math.round(n).toLocaleString('en-US');
   }
   function fmtHours(h) {
     if (h === null || h === undefined) return null;
@@ -65,57 +80,115 @@
         var key = el.getAttribute('data-live-metric');
         var val = m[key];
         if (val === null || val === undefined) return;
-        // if numeric, format; otherwise use raw (admin value_text like "330K+")
-        var formatted = (typeof val === 'number') ? fmt(val) : val;
+        // siempre pasa por fmt(): si viene number OR string numérico (ej "371356")
+        // → se formatea como "371K+". Si viene string no numérico (ej "250+" del
+        // admin value_text) se preserva tal cual.
+        var asNumber = (typeof val === 'number') ? val : parseFloat(val);
+        var formatted = isFinite(asNumber) ? fmt(asNumber) : String(val);
         text(el, formatted);
       });
     }).catch(function () { /* silent — fallback already in markup */ });
   }
 
-  // ─── Categorías + wall de juegos ──────────────────────────────────────
+  // ─── Categorías + wall de juegos (v7.4 — dinámico desde platform-deploy) ──
+  // Ya no asume slugs específicos (carreras/puzzles/…). Itera las cards del
+  // carrusel por POSICIÓN y las sobreescribe con lo que venga del backend:
+  //   - título: nombre real de la categoría del catálogo deploy
+  //   - sessions/hours/games_count: computados en vivo desde vvr_sessions
+  //   - wall: thumbnails reales de juegos de esa categoría (CDN juegos-f2p.monou.gg)
+  // Si el backend devuelve menos categorías que cards hay en el HTML, las
+  // cards sobrantes se ocultan. Si devuelve más, se ignoran (limit del endpoint).
   function loadCategorias() {
     get(CD + '/categorias-with-games').then(function (data) {
       var cats = (data && data.categorias) || [];
-      cats.forEach(function (c) {
-        document.querySelectorAll('[data-category-slug="' + c.slug + '"]').forEach(function (card) {
-          // sessions / hours / games_count
-          card.querySelectorAll('[data-category-field="sessions"]').forEach(function (el) {
-            text(el, fmt(c.cached_sessions));
+      var curr = document.documentElement.lang || 'es';
+
+      // DESKTOP: cards en el carrusel (cualquiera con data-category-slug)
+      var desktopCards = document.querySelectorAll('.carousel-item [data-category-slug]');
+      // MOBILE: cards en el scroller horizontal
+      var mobileCards  = document.querySelectorAll('.md\\:hidden [data-category-slug]');
+
+      function fillCard(card, c) {
+        if (!card || !c) return;
+        // slug data attribute para debug
+        card.setAttribute('data-category-slug', c.slug);
+        // sessions / hours / games_count
+        card.querySelectorAll('[data-category-field="sessions"]').forEach(function (el) {
+          text(el, fmt(c.cached_sessions));
+        });
+        card.querySelectorAll('[data-category-field="hours"]').forEach(function (el) {
+          text(el, fmtHours(c.cached_hours));
+        });
+        card.querySelectorAll('[data-category-field="games_count"]').forEach(function (el) {
+          text(el, c.cached_games !== null && c.cached_games !== undefined ? String(c.cached_games) : null);
+        });
+        // title (ambos idiomas iguales en el catálogo del deploy)
+        card.querySelectorAll('[data-category-field="title"]').forEach(function (el) {
+          if (c.title_es) el.setAttribute('data-es', c.title_es);
+          if (c.title_en) el.setAttribute('data-en', c.title_en);
+          text(el, curr === 'en' ? (c.title_en || c.title_es) : (c.title_es || c.title_en));
+        });
+        // wall: generar 9 tiles dinamicos (3x3) con thumbnails reales, ignorando
+        // los slots hardcodeados del HTML heredado (8 tiles) para evitar empalmes.
+        var wall = card.querySelector('.game-wall');
+        if (wall) {
+          wall.setAttribute('data-category-slug-wall', c.slug);
+          var liveGames = (Array.isArray(c.games) ? c.games : []).filter(function (g) {
+            return g && g.thumbnail_url;
           });
-          card.querySelectorAll('[data-category-field="hours"]').forEach(function (el) {
-            text(el, fmtHours(c.cached_hours));
-          });
-          card.querySelectorAll('[data-category-field="games_count"]').forEach(function (el) {
-            text(el, c.cached_games !== null ? c.cached_games : null);
-          });
-          // title override
-          card.querySelectorAll('[data-category-field="title"]').forEach(function (el) {
-            if (c.title_es) el.setAttribute('data-es', c.title_es);
-            if (c.title_en) el.setAttribute('data-en', c.title_en);
-            // only update visible text if page is in matching lang
-            var curr = document.documentElement.lang || 'es';
-            text(el, curr === 'en' ? c.title_en : c.title_es);
-          });
-          // wall of games: swap FA icons with real thumbnails when available
-          var wall = card.querySelector('.game-wall[data-category-slug-wall="' + c.slug + '"]');
-          if (wall && Array.isArray(c.games) && c.games.length) {
-            var slots = wall.querySelectorAll('.game-tile');
-            c.games.slice(0, slots.length).forEach(function (g, i) {
-              var slot = slots[i];
-              if (!g.thumbnail_url || !slot) return;
-              // replace icon with <img>
-              slot.innerHTML = '';
+          wall.innerHTML = '';
+          var N = 9;  // 3x3
+          for (var i = 0; i < N; i++) {
+            var slot = document.createElement('span');
+            slot.className = 'game-tile';
+            slot.setAttribute('data-game-slot', String(i));
+            var g = liveGames[i];
+            if (g) {
               var img = document.createElement('img');
-              img.src = g.thumbnail_url;
+              var thumb = g.thumbnail_url || '';
+              if (thumb.charAt(0) === '/') thumb = API_BASE + thumb;
+              img.src = thumb;
               img.alt = g.title || g.slug;
               img.loading = 'lazy';
               img.decoding = 'async';
+              img.style.width = '100%';
+              img.style.height = '100%';
+              img.style.objectFit = 'cover';
+              img.style.display = 'block';
+              img.onerror = function () { this.style.display = 'none'; };
               slot.appendChild(img);
-            });
+            }
+            wall.appendChild(slot);
           }
-        });
+        }
+      }
+
+      // Rellena las cards por POSICIÓN (0..N) con las categorías del backend
+      desktopCards.forEach(function (card, i) {
+        var c = cats[i];
+        if (c) { fillCard(card, c); card.style.display = ''; }
+        else   { card.style.display = 'none'; }  // esconde cards sobrantes
       });
-    }).catch(function () { /* silent — fallback FA icons stay */ });
+      mobileCards.forEach(function (card, i) {
+        var c = cats[i];
+        if (c) { fillCard(card, c); card.style.display = ''; }
+        else   { card.style.display = 'none'; }
+      });
+
+      // Ajusta el conteo de indicators del carrusel si hay menos slides
+      // (cada slide tiene 3 cards según el HTML; el slide del CTA siempre se queda)
+      try {
+        var CARDS_PER_SLIDE = 3;
+        var activeCards = Math.min(cats.length, desktopCards.length);
+        var slidesNeeded = Math.max(1, Math.ceil(activeCards / CARDS_PER_SLIDE));
+        var slidesTotal  = slidesNeeded + 1; // +1 para el CTA final
+        document.querySelectorAll('.carousel-indicator').forEach(function (btn, i) {
+          btn.style.display = i < slidesTotal ? '' : 'none';
+        });
+      } catch (_e) {}
+    }).catch(function (err) {
+      try { console.warn('[cms-landing] loadCategorias failed', err); } catch (_e) {}
+    });
   }
 
   // ─── Site links (footer + CTAs) ───────────────────────────────────────
